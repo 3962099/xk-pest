@@ -22,8 +22,13 @@
   header{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;
     padding:14px 16px;position:sticky;top:0;z-index:10}
   header h1{margin:0;font-size:18px}
-  header .sub{font-size:12px;opacity:.9;margin-top:2px}
+  .tabs{display:flex;gap:8px;padding:10px 14px 0;background:var(--bg)}
+  .tab{flex:1;padding:10px;border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;
+    background:#fff;font-size:14px;font-weight:600;color:var(--muted)}
+  .tab.active{background:var(--green);color:#fff;border-color:var(--green)}
   .wrap{max-width:880px;margin:0 auto;padding:14px}
+  .sec{display:none}
+  .sec.active{display:block}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
     padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
   .card h2{margin:0 0 12px;font-size:16px;display:flex;align-items:center;gap:8px}
@@ -33,7 +38,7 @@
     border-radius:8px;font-size:15px;background:#fff;color:var(--txt)}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green)}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .grid4{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:11px 16px;
     background:var(--green);color:#fff;font-weight:600}
   button:hover{background:var(--green-d)}
@@ -64,6 +69,23 @@
   .prov{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
   .prov input{width:auto;flex:1;min-width:160px}
   @media(max-width:560px){.grid3{grid-template-columns:1fr 1fr}.card{padding:12px}}
+  /* 药品库 */
+  .search{display:flex;gap:8px;margin-bottom:10px}
+  .search input{flex:1}
+  .drug-item{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+  .drug-item .di-top{display:flex;align-items:center;gap:8px}
+  .drug-item .di-actions{margin-left:auto;display:flex;gap:6px}
+  .drug-item .di-meta{font-size:12px;color:var(--muted);margin-top:4px}
+  .pill{font-size:11px;background:#e6f4ea;color:var(--green-d);border-radius:12px;padding:2px 8px}
+  .drug-row{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;background:#fafbfa}
+  .drug-row .dr-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .drug-row .dr-head .x{margin-left:auto}
+  .drug-line{font-size:12px;margin:3px 0}
+  /* 弹窗 */
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;
+    justify-content:center;z-index:200;padding:14px}
+  .modal{background:#fff;border-radius:14px;padding:18px;width:100%;max-width:460px;max-height:90vh;overflow:auto}
+  .modal h3{margin:0 0 10px}
   /* 打印确认单 */
   #printArea{display:none}
   @media print{
@@ -80,85 +102,124 @@
   <h1>虫控消杀服务确认平台</h1>
 </header>
 
+<div class="tabs">
+  <button class="tab active" data-t="fill" onclick="switchTab('fill')">填单 / 记录</button>
+  <button class="tab" data-t="drugs" onclick="switchTab('drugs')">药品库</button>
+</div>
+
 <div class="wrap">
 
-  <!-- 服务商名称 -->
-  <div class="card">
-    <h2>服务商信息</h2>
-    <div class="prov">
-      <label style="margin:0">服务商名称</label>
-      <input id="providerName" value="能多洁（中国）环境科技有限公司" placeholder="如：能多洁">
-      <span class="note" style="margin:0">将显示在导出与确认单上</span>
-    </div>
-  </div>
+  <!-- ====== 填单 / 记录 ====== -->
+  <div class="sec active" id="sec-fill">
 
-  <!-- 新增记录 -->
-  <div class="card">
-    <h2>① 新增消杀记录 <span class="tag">服务商填写</span></h2>
-    <form id="recForm">
-      <div class="grid2">
-        <div><label>消杀日期</label><input type="date" id="fDate" required></div>
-        <div><label>消杀时间</label><input type="time" id="fTime" required></div>
+    <!-- 服务商名称 -->
+    <div class="card">
+      <h2>服务商信息</h2>
+      <div class="prov">
+        <label style="margin:0">服务商名称</label>
+        <input id="providerName" value="能多洁（中国）环境科技有限公司" placeholder="如：能多洁">
+        <span class="note" style="margin:0">将显示在导出与确认单上</span>
       </div>
-      <div class="grid2">
-        <div><label>工厂 / 区域</label>
-          <input id="fFactory" list="facList" placeholder="如：必旺 / 大旺 / 宿舍" required>
-          <datalist id="facList">
-            <option>必旺</option><option>大旺</option><option>祥旺</option><option>祥旺A3</option>
-            <option>永旺</option><option>立旺</option><option>明旺</option><option>明旺利乐</option>
-            <option>旺旺</option><option>旺旺立旺</option><option>宿舍</option>
-          </datalist>
+    </div>
+
+    <!-- 新增记录 -->
+    <div class="card">
+      <h2>① 新增消杀记录 <span class="tag">服务商填写</span></h2>
+      <form id="recForm">
+        <div class="grid2">
+          <div><label>消杀日期</label><input type="date" id="fDate" required></div>
+          <div><label>消杀时间</label><input type="time" id="fTime" required></div>
         </div>
-        <div><label>范围</label><input id="fScope" placeholder="如：车间 / 干部楼 / 绿化带" required></div>
-      </div>
-      <div class="grid2">
+        <div class="grid2">
+          <div><label>工厂 / 区域</label>
+            <input id="fFactory" list="facList" placeholder="如：必旺 / 大旺 / 宿舍" required>
+            <datalist id="facList">
+              <option>必旺</option><option>大旺</option><option>祥旺</option><option>祥旺A3</option>
+              <option>永旺</option><option>立旺</option><option>明旺</option><option>明旺利乐</option>
+              <option>旺旺</option><option>旺旺立旺</option><option>宿舍</option>
+            </datalist>
+          </div>
+          <div><label>范围</label><input id="fScope" placeholder="如：车间 / 干部楼 / 绿化带" required></div>
+        </div>
         <div><label>消杀方式</label>
           <select id="fMethod">
             <option>滞留+烟雾</option><option>滞留</option><option>烟雾</option><option>其他</option>
           </select>
         </div>
-        <div><label>药品名称</label><input id="fDrugName" placeholder="如：残杀威 / 清氛"></div>
-      </div>
-      <div class="grid2">
-        <div><label>靶标生物</label><input id="fTarget" placeholder="如：蟑螂 / 鼠"></div>
-        <div><label>配比方式</label><input id="fRatio" placeholder="如：1:50"></div>
-      </div>
-      <div class="grid2">
-        <div><label>带入数量</label><input id="fBringIn" placeholder="如：2 瓶"></div>
-        <div><label>使用量(L)</label><input id="fUsed" placeholder="如：1L"></div>
-      </div>
-      <div class="grid2">
-        <div><label>带出废弃物料 / 包装</label><input id="fWaste" placeholder="如：空瓶 1"></div>
-        <div><label>剩余数量(L)</label><input id="fRemain" placeholder="如：1L"></div>
-      </div>
-      <label>备注</label><textarea id="fNote" rows="2" placeholder="特殊情况说明（选填）"></textarea>
-      <div class="btn-row">
-        <button type="submit">＋ 添加本条记录</button>
-        <button type="button" class="ghost" onclick="resetForm()">清空表单</button>
-      </div>
-    </form>
-  </div>
 
-  <!-- 当日记录与签名 -->
-  <div class="card">
-    <h2>② 当日记录与签名确认</h2>
-    <div class="date-tabs" id="dateTabs"></div>
-    <div id="dayView"></div>
-  </div>
+        <label>使用药品（可添加多款）</label>
+        <div id="formDrugs"></div>
+        <div class="btn-row">
+          <select id="drugPicker" onchange="addDrugToForm()"><option value="">＋ 选择药品添加</option></select>
+          <button type="button" class="ghost" onclick="openDrugModal()">＋ 新建药品</button>
+        </div>
 
-  <!-- 数据管理 -->
-  <div class="card">
-    <h2>③ 数据管理</h2>
-    <div class="btn-row">
-      <button onclick="exportExcel()">⬇ 导出 Excel（全部）</button>
-      <button class="ghost" onclick="exportJSON()">⬇ 备份数据(JSON)</button>
-      <button class="ghost" onclick="importJSON()">⬆ 导入备份</button>
-      <button class="danger" onclick="clearAll()">清空全部数据</button>
+        <label>备注</label><textarea id="fNote" rows="2" placeholder="特殊情况说明（选填）"></textarea>
+        <div class="btn-row">
+          <button type="submit">＋ 添加本条记录</button>
+          <button type="button" class="ghost" onclick="resetForm()">清空表单</button>
+        </div>
+      </form>
     </div>
-    <p class="note">数据保存在云端（部署后会给你一个固定网址，能多洁手机随处可填并自动上传）；你本机<b>开机后会自动把新记录同步进企微智能表格</b>。也可「备份数据(JSON)」留底。导出 Excel 可在电脑用 WPS / Excel 打开。</p>
-    <input type="file" id="fileInput" accept=".json" style="display:none" onchange="doImport(event)">
+
+    <!-- 当日记录与签名 -->
+    <div class="card">
+      <h2>② 当日记录与签名确认</h2>
+      <div class="date-tabs" id="dateTabs"></div>
+      <div id="dayView"></div>
+    </div>
+
+    <!-- 数据管理 -->
+    <div class="card">
+      <h2>③ 数据管理</h2>
+      <div class="btn-row">
+        <button onclick="exportExcel()">⬇ 导出 Excel（全部）</button>
+        <button class="ghost" onclick="exportJSON()">⬇ 备份数据(JSON)</button>
+        <button class="ghost" onclick="importJSON()">⬆ 导入备份</button>
+        <button class="danger" onclick="clearAll()">清空全部数据</button>
+      </div>
+      <p class="note">数据保存在云端（固定网址，能多洁手机随处可填并自动上传）；你本机<b>开机后会自动把新记录同步进企微智能表格</b>。也可「备份数据(JSON)」留底。导出 Excel 可在电脑用 WPS / Excel 打开。</p>
+      <input type="file" id="fileInput" accept=".json" style="display:none" onchange="doImport(event)">
+    </div>
+
   </div>
 
+  <!-- ====== 药品库 ====== -->
+  <div class="sec" id="sec-drugs">
+    <div class="card">
+      <h2>药品库 <span class="tag">可增删改</span></h2>
+      <p class="note">这里维护一份药品清单：每款药独立记录「名称 / 适用靶标生物 / 配比方式 / 备注」。填单时从清单里选择，自动带出靶标与配比，不用重复填写。</p>
+      <div class="search">
+        <input id="drugSearch" placeholder="搜索药品名称或靶标生物" oninput="renderDrugs()">
+        <button class="ghost" onclick="openDrugModal()">＋ 新增药品</button>
+      </div>
+      <div id="drugList"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 药品编辑弹窗 -->
+<div id="drugModal" class="modal-mask" style="display:none">
+  <div class="modal">
+    <h3 id="drugModalTitle">新增药品</h3>
+    <label>药品名称 *</label><input id="dName" placeholder="如：残杀威">
+    <label>适用靶标生物（多个用顿号 / 逗号分隔）</label><input id="dTargets" placeholder="如：蟑螂、蚊、鼠">
+    <div class="grid2">
+      <div><label>剂量</label><input id="dDose" placeholder="如：200"></div>
+      <div><label>稀释比例</label><input id="dDilution" placeholder="如：1:50"></div>
+    </div>
+    <div class="grid2">
+      <div><label>单位 *</label><input id="dUnit" placeholder="如：mL / L / g"></div>
+      <div><label>施用方法</label><input id="dMethod" placeholder="如：滞留喷洒"></div>
+    </div>
+    <label>备注</label><input id="dNote" placeholder="选填">
+    <p class="note" id="drugErr" style="color:var(--red)"></p>
+    <div class="btn-row">
+      <button onclick="saveDrug()">保存</button>
+      <button class="ghost" onclick="closeDrugModal()">取消</button>
+    </div>
+  </div>
 </div>
 
 <!-- 打印确认单区域 -->
@@ -171,11 +232,16 @@
 let records = [];
 let confirmations = {};
 let providerName = "能多洁（中国）环境科技有限公司";
+let drugs = [];           // 药品库
+let formDrugs = [];       // 当前表单已选药品
+let editingDrugId = null; // 正在编辑的药品 id
 let currentDate = null;
-let API_OK = false;   // 是否连上共享后台
+let API_OK = false;       // 是否连上共享后台
 
-// 云端 API 基地址：同域时为空字符串；静态镜像时由 config.js 指定
 function API(p){ return (window.XK_API_BASE || "") + p; }
+function esc(s){ return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
 /* 本地模式：存浏览器；云端模式：逐条接口已在各操作中单独调用 */
 function persistLocal(){
@@ -187,8 +253,21 @@ async function apiAdd(r){ await fetch(API("/api/record"),{method:"POST",headers:
 async function apiDel(id){ await fetch(API("/api/record/")+encodeURIComponent(id),{method:"DELETE"}); }
 async function apiConfirm(c){ await fetch(API("/api/confirm"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(c)}); }
 async function apiProvider(n){ await fetch(API("/api/provider"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})}); }
+async function apiAddDrug(d){ const r=await fetch(API("/api/drugs"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)}); const j=await r.json(); if(j.ok) drugs.push(j.drug); return j; }
+async function apiUpdDrug(id,d){ const r=await fetch(API("/api/drugs/")+encodeURIComponent(id),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)}); const j=await r.json(); if(j.ok){ const i=drugs.findIndex(x=>x.id===id); if(i>=0) drugs[i]=j.drug; } return j; }
+async function apiDelDrug(id){ return fetch(API("/api/drugs/")+encodeURIComponent(id),{method:"DELETE"}); }
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
   setTimeout(()=>t.classList.remove("show"),1800); }
+
+/* 把一条记录里的药品统一成数组（兼容旧版单药记录） */
+function recordDrugs(r){
+  if(Array.isArray(r.drugs) && r.drugs.length) return r.drugs;
+  if(r.drugName) return [{drugName:r.drugName, targets:r.target?[r.target]:[], ratio:{dilution:r.ratio},
+    bringIn:r.bringIn, used:r.used, waste:r.waste, remain:r.remain}];
+  return [];
+}
+function ratioText(rt){ if(!rt) return "-"; const p=[]; if(rt.dose) p.push("剂量"+rt.dose); if(rt.dilution) p.push("稀释"+rt.dilution); if(rt.unit) p.push(rt.unit); if(rt.method) p.push(rt.method); return p.join(" ")||"-"; }
+function isValidNum(v){ return /^\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?%$/.test(v); }
 
 /* 启动时自动判断：连上后台就用共享数据，否则用本机存储 */
 async function boot(){
@@ -201,14 +280,119 @@ async function boot(){
         providerName = s.provider || "能多洁";
         records = s.records || [];
         confirmations = s.confirmations || {};
+        drugs = s.drugs || [];
       }
     }
   }catch(e){ /* 静态环境：保持本机模式 */ }
   document.getElementById("providerName").value = providerName;
-  render();
+  renderPicker(); render();
 }
-function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function switchTab(t){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active", b.dataset.t===t));
+  document.getElementById("sec-fill").classList.toggle("active", t==="fill");
+  document.getElementById("sec-drugs").classList.toggle("active", t==="drugs");
+  if(t==="drugs") renderDrugs();
+}
+
+/* ============ 药品库 UI ============ */
+function renderPicker(){
+  const sel=document.getElementById("drugPicker"); if(!sel) return;
+  sel.innerHTML='<option value="">＋ 选择药品添加</option>'+drugs.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join("");
+}
+function renderDrugs(){
+  const q=(document.getElementById("drugSearch").value||"").trim().toLowerCase();
+  const list=drugs.filter(d=>{
+    if(!q) return true;
+    if(d.name.toLowerCase().includes(q)) return true;
+    if((d.targets||[]).some(t=>t.toLowerCase().includes(q))) return true;
+    return false;
+  });
+  const box=document.getElementById("drugList");
+  if(list.length===0){ box.innerHTML='<div class="empty">暂无药品。点击「＋ 新增药品」添加。</div>'; return; }
+  box.innerHTML=list.map(d=>{
+    const tg=(d.targets||[]).join("、")||"-";
+    const rt=ratioText(d.ratio);
+    return `<div class="drug-item">
+      <div class="di-top"><b>${esc(d.name)}</b>
+        <div class="di-actions">
+          <button class="ghost" style="padding:4px 10px;font-size:12px" onclick="openDrugModal('${d.id}')">编辑</button>
+          <button class="danger" style="padding:4px 10px;font-size:12px" onclick="deleteDrug('${d.id}')">删除</button>
+        </div></div>
+      <div class="di-meta">靶标：${esc(tg)}　配比：${esc(rt)}　备注：${esc(d.note||'-')}</div>
+    </div>`;
+  }).join("");
+}
+function openDrugModal(id){
+  editingDrugId = id||null;
+  document.getElementById("drugModalTitle").textContent = id? "编辑药品":"新增药品";
+  const d = id? drugs.find(x=>x.id===id):null;
+  document.getElementById("dName").value = d?d.name:"";
+  document.getElementById("dTargets").value = d?(d.targets||[]).join("、"):"";
+  document.getElementById("dDose").value = d?(d.ratio?.dose||""):"";
+  document.getElementById("dDilution").value = d?(d.ratio?.dilution||""):"";
+  document.getElementById("dUnit").value = d?(d.ratio?.unit||""):"";
+  document.getElementById("dMethod").value = d?(d.ratio?.method||""):"";
+  document.getElementById("dNote").value = d?(d.note||""):"";
+  document.getElementById("drugErr").textContent="";
+  document.getElementById("drugModal").style.display="flex";
+}
+function closeDrugModal(){ document.getElementById("drugModal").style.display="none"; }
+function saveDrug(){
+  const name=document.getElementById("dName").value.trim();
+  const targets=document.getElementById("dTargets").value.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
+  const dose=document.getElementById("dDose").value.trim();
+  const dilution=document.getElementById("dDilution").value.trim();
+  const unit=document.getElementById("dUnit").value.trim();
+  const method=document.getElementById("dMethod").value.trim();
+  const note=document.getElementById("dNote").value.trim();
+  let err=null;
+  if(!name) err="药品名称不能为空";
+  else for(const ex of drugs){ if(ex.id!==editingDrugId && ex.name.toLowerCase()===name.toLowerCase()){ err="药品名称已存在，不可重复"; break; } }
+  if(!err && !unit) err="单位不能为空（如 mL / L / g）";
+  if(!err && dose && !isValidNum(dose)) err="剂量格式不正确（应为数字或比例，如 200 或 1:50）";
+  if(!err && dilution && !isValidNum(dilution)) err="稀释比例格式不正确（应为数字或比例，如 1:50）";
+  if(err){ document.getElementById("drugErr").textContent=err; return; }
+  const payload={ name, targets, ratio:{dose,dilution,unit,method}, note };
+  const job = editingDrugId ? apiUpdDrug(editingDrugId, payload) : apiAddDrug(payload);
+  job.then(()=>{ closeDrugModal(); renderPicker(); renderDrugs(); toast(editingDrugId?"已更新":"已新增"); })
+     .catch(()=>toast("⚠ 保存失败"));
+}
+function deleteDrug(id){
+  const d=drugs.find(x=>x.id===id); if(!d) return;
+  if(!confirm("确定删除药品「"+d.name+"」？\n已填记录中该药的信息会保留（快照），不受影响。")) return;
+  apiDelDrug(id).then(()=>{ drugs=drugs.filter(x=>x.id!==id); formDrugs=formDrugs.filter(x=>x.drugId!==id);
+    renderPicker(); renderDrugs(); renderFormDrugs(); toast("已删除"); }).catch(()=>toast("⚠ 删除失败"));
+}
+
+/* ============ 填单：多款药 ============ */
+function addDrugToForm(){
+  const sel=document.getElementById("drugPicker");
+  const id=sel.value; if(!id) return;
+  const d=drugs.find(x=>x.id===id); if(!d) return;
+  if(formDrugs.some(x=>x.drugId===id)){ toast("该药品已添加"); return; }
+  formDrugs.push({drugId:d.id, drugName:d.name, targets:d.targets||[], ratio:d.ratio||{},
+    bringIn:"", used:"", waste:"", remain:""});
+  sel.value=""; renderFormDrugs();
+}
+function removeFormDrug(i){ formDrugs.splice(i,1); renderFormDrugs(); }
+function renderFormDrugs(){
+  const box=document.getElementById("formDrugs");
+  if(formDrugs.length===0){ box.innerHTML='<p class="note">尚未添加药品。请在下方选择或新建药品。</p>'; return; }
+  box.innerHTML = formDrugs.map((d,i)=>{
+    const tg=(d.targets||[]).join("、")||"-"; const rt=ratioText(d.ratio);
+    return `<div class="drug-row">
+      <div class="dr-head"><b>${esc(d.drugName)}</b>
+        <span class="pill">靶标：${esc(tg)}</span><span class="pill">配比：${esc(rt)}</span>
+        <button type="button" class="danger x" style="padding:3px 9px;font-size:12px" onclick="removeFormDrug(${i})">× 移除</button></div>
+      <div class="grid4">
+        <div><label>带入数量</label><input placeholder="如：2 瓶" value="${esc(d.bringIn||"")}" oninput="formDrugs[${i}].bringIn=this.value"></div>
+        <div><label>使用量(L)</label><input placeholder="如：1L" value="${esc(d.used||"")}" oninput="formDrugs[${i}].used=this.value"></div>
+        <div><label>带出废弃物料/包装</label><input placeholder="如：空瓶1" value="${esc(d.waste||"")}" oninput="formDrugs[${i}].waste=this.value"></div>
+        <div><label>剩余数量(L)</label><input placeholder="如：1L" value="${esc(d.remain||"")}" oninput="formDrugs[${i}].remain=this.value"></div>
+      </div>
+    </div>`;
+  }).join("");
+}
 
 /* ============ 初始化 ============ */
 document.getElementById("providerName").value = providerName;
@@ -221,23 +405,19 @@ document.getElementById("providerName").addEventListener("change", e=>{
 
 document.getElementById("recForm").addEventListener("submit", e=>{
   e.preventDefault();
-  const r = {
-    id: uid(),
-    date: document.getElementById("fDate").value,
-    time: document.getElementById("fTime").value,
-    factory: document.getElementById("fFactory").value.trim(),
-    scope: document.getElementById("fScope").value.trim(),
-    method: document.getElementById("fMethod").value,
-    drugName: document.getElementById("fDrugName").value.trim(),
-    target: document.getElementById("fTarget").value.trim(),
-    ratio: document.getElementById("fRatio").value.trim(),
-    bringIn: document.getElementById("fBringIn").value.trim(),
-    used: document.getElementById("fUsed").value.trim(),
-    waste: document.getElementById("fWaste").value.trim(),
-    remain: document.getElementById("fRemain").value.trim(),
-    note: document.getElementById("fNote").value.trim()
-  };
-  if(!r.date||!r.time||!r.factory||!r.scope){ toast("请填齐必填项"); return; }
+  const factory=document.getElementById("fFactory").value.trim();
+  const scope=document.getElementById("fScope").value.trim();
+  const date=document.getElementById("fDate").value;
+  const time=document.getElementById("fTime").value;
+  if(!date||!time||!factory||!scope){ toast("请填齐必填项"); return; }
+  if(formDrugs.length===0){ toast("请至少添加一款药品"); return; }
+  const drugsPayload = formDrugs.map(d=>({
+    drugId:d.drugId, drugName:d.drugName, targets:d.targets, ratio:d.ratio,
+    bringIn:d.bringIn.trim(), used:d.used.trim(), waste:d.waste.trim(), remain:d.remain.trim()
+  }));
+  const r = { id:uid(), date, time, factory, scope,
+    method:document.getElementById("fMethod").value, note:document.getElementById("fNote").value.trim(),
+    drugs:drugsPayload };
   records.push(r);
   if(API_OK){ apiAdd(r).catch(()=>toast("⚠ 提交到云端失败")); } else { persistLocal(); }
   if(!currentDate) currentDate = r.date;
@@ -247,21 +427,15 @@ document.getElementById("recForm").addEventListener("submit", e=>{
 function resetForm(){
   document.getElementById("fFactory").value="";
   document.getElementById("fScope").value="";
-  document.getElementById("fDrugName").value="";
-  document.getElementById("fTarget").value="";
-  document.getElementById("fRatio").value="";
-  document.getElementById("fBringIn").value="";
-  document.getElementById("fUsed").value="";
-  document.getElementById("fWaste").value="";
-  document.getElementById("fRemain").value="";
   document.getElementById("fNote").value="";
   document.getElementById("fDate").value = todayStr();
   document.getElementById("fTime").value = "09:00";
+  formDrugs = []; renderFormDrugs();
 }
+renderFormDrugs();
 
 /* ============ 渲染：日期标签 + 当日视图 ============ */
 function dateList(){ const s=[...new Set(records.map(r=>r.date))]; s.sort().reverse(); return s; }
-
 function render(){
   const dates = dateList();
   const tabs = document.getElementById("dateTabs");
@@ -278,6 +452,10 @@ function render(){
 }
 function selectDate(d){ currentDate=d; render(); }
 
+function drugCellHTML(drs){
+  if(drs.length===0) return '-';
+  return drs.map(d=>`<div class="drug-line"><b>${esc(d.drugName)}</b> <span class="pill">${esc((d.targets||[]).join('、')||'-')}</span> 配比:${esc(ratioText(d.ratio))}<br>带${esc(d.bringIn||'-')} 用${esc(d.used||'-')} 剩${esc(d.remain||'-')}｜废:${esc(d.waste||'-')}</div>`).join('');
+}
 function renderDay(d){
   const list = records.filter(r=>r.date===d).sort((a,b)=>a.time.localeCompare(b.time));
   const c = confirmations[d] || {};
@@ -288,15 +466,15 @@ function renderDay(d){
     </div>`;
   if(list.length===0){ html += '<div class="empty">当天暂无记录</div>'; }
   else{
-    html += '<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th><th>备注</th><th></th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品明细</th><th>备注</th><th></th></tr></thead><tbody>';
     list.forEach(r=>{
+      const drs=recordDrugs(r);
       html += `<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td>
-        <td>${esc(r.method)}</td><td>${esc(r.drugName)||'-'}</td><td>${esc(r.target)||'-'}</td><td>${esc(r.ratio)||'-'}</td><td>${esc(r.bringIn)||'-'}</td><td>${esc(r.used)||'-'}</td><td>${esc(r.waste)||'-'}</td><td>${esc(r.remain)||'-'}</td><td>${esc(r.note)||'-'}</td>
+        <td>${esc(r.method)}</td><td>${drugCellHTML(drs)}</td><td>${esc(r.note)||'-'}</td>
         <td><button class="danger" style="padding:4px 8px;font-size:12px" onclick="delRec('${r.id}')">删</button></td></tr>`;
     });
     html += '</tbody></table>';
   }
-  // 签名区
   html += `<div class="grid2" style="margin-top:14px">
     <div class="sign-box">
       <h3>服务商签名 <span class="note">(消杀方)</span></h3>
@@ -328,7 +506,6 @@ function renderDay(d){
   if(c.provider?.img){ drawFromData(document.getElementById("padP"), c.provider.img); }
   if(c.company?.img){ drawFromData(document.getElementById("padC"), c.company.img); }
 }
-function esc(s){ return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
 function delRec(id){ if(!confirm("确定删除这条记录？"))return;
   records = records.filter(r=>r.id!==id);
   if(API_OK){ apiDel(id).catch(()=>toast("⚠ 删除失败")); } else { persistLocal(); }
@@ -388,9 +565,14 @@ function printDay(d){
   const c = confirmations[d] || {};
   let h = `<h2 style="text-align:center">虫控消杀服务确认单</h2>`;
   h += `<p><b>服务商：</b>${esc(providerName)}　<b>日期：</b>${d}　<b>状态：</b>${c.confirmed?'已双方签名':'待签名'}</p>`;
-  h += `<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th><th>备注</th></tr></thead><tbody>`;
-  list.forEach(r=>{ h+=`<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td><td>${esc(r.method)}</td><td>${esc(r.drugName)||'-'}</td><td>${esc(r.target)||'-'}</td><td>${esc(r.ratio)||'-'}</td><td>${esc(r.bringIn)||'-'}</td><td>${esc(r.used)||'-'}</td><td>${esc(r.waste)||'-'}</td><td>${esc(r.remain)||'-'}</td><td>${esc(r.note)||'-'}</td></tr>`; });
-  h += `</tbody></table>`;
+  list.forEach((r,idx)=>{
+    const drs=recordDrugs(r);
+    h += `<h3 style="margin:14px 0 4px">记录 ${idx+1}：${esc(r.factory)} ${r.time}（${esc(r.scope)}／${esc(r.method)}）</h3>`;
+    h += `<table><thead><tr><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th></tr></thead><tbody>`;
+    if(drs.length===0){ h += `<tr><td colspan="7">（无药品）</td></tr>`; }
+    drs.forEach(d=>{ h += `<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join('、')||'-')}</td><td>${esc(ratioText(d.ratio))}</td><td>${esc(d.bringIn||'-')}</td><td>${esc(d.used||'-')}</td><td>${esc(d.waste||'-')}</td><td>${esc(d.remain||'-')}</td></tr>`; });
+    h += `</tbody></table>`;
+  });
   h += `<div style="display:flex;justify-content:space-between;margin-top:30px">
     <div><b>服务商签名：</b><br>${c.provider?.img?`<img src="${c.provider.img}" height="60">`:'(未签)'}<br>姓名：${esc(c.provider?.name||'')}</div>
     <div><b>我司签名：</b><br>${c.company?.img?`<img src="${c.company.img}" height="60">`:'(未签)'}<br>姓名：${esc(c.company?.name||'')}</div>
@@ -400,30 +582,37 @@ function printDay(d){
   setTimeout(()=>window.print(),100);
 }
 
-/* ============ 导出 Excel ============ */
+/* ============ 导出 Excel（双表：记录 + 药品明细，自动适配任意数量药品） ============ */
 function exportExcel(){
   if(records.length===0){ toast("暂无数据可导出"); return; }
-  const header = ["消杀日期","工厂/区域","消杀时间","范围","消杀方式","药品名称","靶标生物","配比方式","带入数量","使用量(L)","带出废弃物料/包装","剩余数量(L)","备注",
-    "确认状态","服务商签名人","我司确认人","确认日期"];
-  const data = [header];
   const sorted = [...records].sort((a,b)=> a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  // 表1：记录级
+  const head1 = ["消杀日期","工厂/区域","消杀时间","范围","消杀方式","药品摘要","备注","确认状态","服务商签名人","我司确认人","确认日期"];
+  const data1 = [head1];
+  // 表2：药品明细（每款药一行）
+  const head2 = ["消杀日期","工厂/区域","消杀时间","药品名称","靶标生物","配比方式","带入数量","使用量(L)","带出废弃物料/包装","剩余数量(L)"];
+  const data2 = [head2];
   sorted.forEach(r=>{
     const c = confirmations[r.date] || {};
-    data.push([ r.date, r.factory, r.time, r.scope, r.method, r.drugName, r.target, r.ratio, r.bringIn, r.used, r.waste, r.remain, r.note,
+    const drs = recordDrugs(r);
+    data1.push([ r.date, r.factory, r.time, r.scope, r.method,
+      drs.map(d=>d.drugName).join("、")||"-", r.note,
       c.confirmed?"已双方签名":"待签名", c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
+    drs.forEach(d=>{ data2.push([ r.date, r.factory, r.time, d.drugName, (d.targets||[]).join("、")||"-",
+      ratioText(d.ratio), d.bringIn||"", d.used||"", d.waste||"", d.remain||"" ]); });
   });
   try{
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    ws["!cols"] = [{wch:12},{wch:14},{wch:10},{wch:16},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10},{wch:18},{wch:12},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
-    XLSX.utils.book_append_sheet(wb, ws, "消杀确认记录");
+    const ws1 = XLSX.utils.aoa_to_sheet(data1);
+    ws1["!cols"] = [{wch:12},{wch:14},{wch:10},{wch:16},{wch:12},{wch:20},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, ws1, "消杀确认记录");
+    const ws2 = XLSX.utils.aoa_to_sheet(data2);
+    ws2["!cols"] = [{wch:12},{wch:14},{wch:10},{wch:14},{wch:14},{wch:18},{wch:12},{wch:10},{wch:18},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws2, "药品明细");
     XLSX.writeFile(wb, "消杀确认记录_"+todayStr()+".xlsx");
-    toast("Excel 已导出");
+    toast("Excel 已导出（含药品明细表）");
   }catch(e){
-    // 离线兜底：HTML 表格导出为 .xls
-    let html = '<table border="1">';
-    data.forEach(row=>{ html += "<tr>"+row.map(c=>`<td>${c??""}</td>`).join("")+"</tr>"; });
-    html += "</table>";
+    let html = '<table border="1">'+data1.map(row=>"<tr>"+row.map(c=>`<td>${c??""}</td>`).join("")+"</tr>").join("")+'</table>';
     const blob = new Blob(["\ufeff"+html], {type:"application/vnd.ms-excel"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
     a.download="消杀确认记录_"+todayStr()+".xls"; a.click();
@@ -433,7 +622,7 @@ function exportExcel(){
 
 /* ============ 备份 / 导入 ============ */
 function exportJSON(){
-  const payload = { provider:providerName, records, confirmations, exportedAt:new Date().toISOString() };
+  const payload = { provider:providerName, records, confirmations, drugs, exportedAt:new Date().toISOString() };
   const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download="消杀数据备份_"+todayStr()+".json"; a.click(); toast("备份已下载");
@@ -447,10 +636,12 @@ function doImport(e){
     if(p.records) records=p.records;
     if(p.confirmations) confirmations=p.confirmations;
     if(p.provider) providerName=p.provider;
+    if(Array.isArray(p.drugs)) drugs=p.drugs;
     document.getElementById("providerName").value=providerName;
-    if(API_OK){ (p.records||[]).forEach(r=>apiAdd(r)); Object.entries(p.confirmations||{}).forEach(([k,v])=>apiConfirm(v)); }
+    if(API_OK){ (p.records||[]).forEach(r=>apiAdd(r)); Object.entries(p.confirmations||{}).forEach(([k,v])=>apiConfirm(v));
+      (p.drugs||[]).forEach(d=>apiAddDrug(d)); }
     else { persistLocal(); }
-    render(); toast("导入成功");
+    renderPicker(); renderDrugs(); render(); toast("导入成功");
   }catch(err){ toast("文件格式错误"); } };
   rd.readAsText(f); e.target.value="";
 }
