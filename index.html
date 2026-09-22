@@ -188,7 +188,7 @@
   <div class="sec" id="sec-drugs">
     <div class="card">
       <h2>药品库 <span class="tag">可增删改</span></h2>
-      <p class="note">这里维护一份药品清单：每款药记录「名称 / 适用靶标生物 / 稀释比例 / 施用方法 / 备注」。<b>稀释比例</b>支持多种（如 1:100 与 1:200 同时用），用顿号或逗号分隔。填单时从清单里选择，自动带出靶标与配比。</p>
+      <p class="note">这里维护一份药品清单：每款药记录「名称 / 适用靶标生物 / 稀释比例 / 施用方法 / 备注」。<b>稀释比例</b>任意填写（数字、中文、英文、百分比都行；多种用 <code>、</code> / <code>,</code> / <code>/</code> 分隔）。填单时从清单里选择，自动带出靶标与配比。</p>
       <div class="search">
         <input id="drugSearch" placeholder="搜索药品名称或靶标生物" oninput="renderDrugs()">
         <button class="ghost" onclick="openDrugModal()">＋ 新增药品</button>
@@ -207,7 +207,7 @@
     <label>药品名称 *</label><input id="dName" placeholder="如：残杀威">
     <label>适用靶标生物（多个用顿号 / 逗号分隔）</label><input id="dTargets" placeholder="如：蟑螂、蚊、鼠">
     <div class="grid2">
-      <div><label>稀释比例</label><input id="dDilution" placeholder="如：1:50（多种用顿号/逗号分隔，如 1:100、1:200）"></div>
+      <div><label>稀释比例</label><input id="dDilution" placeholder="任意文字，如：1:100、1:200 / 原液 / RTU / 50%"></div>
       <div><label>施用方法</label><input id="dMethod" placeholder="如：滞留喷洒"></div>
     </div>
     <label>备注</label><input id="dNote" placeholder="选填">
@@ -224,8 +224,8 @@
   <div class="modal" style="max-width:780px">
     <h3>导入药品清单</h3>
     <p class="note">在 Excel/WPS/记事本里整理好药品清单（每行一款药），复制后粘到框里 → 点「解析预览」检查 → 没问题就点「确认导入」。</p>
-    <p class="note">列顺序：<b>药品名称 | 适用靶标 | 稀释比例 | 施用方法 | 备注</b>。名称是必填项，其它可空。靶标多项用顿号(、)。分隔符支持制表符(从 Excel 直接复制)、竖线 <code>|</code>、或半角逗号 <code>,</code>。</p>
-    <textarea id="drugImportText" rows="8" placeholder="例如（用竖线分隔）：&#10;拜耳拜灭|蟑螂、蚂蚁|1:100|滞留喷洒|德国进口&#10;奋斗呐|苍蝇、蚊子|1:200|空间喷洒|&#10;或直接从 Excel 复制（自动按制表符分隔）"></textarea>
+    <p class="note">列顺序：<b>药品名称 | 适用靶标 | 稀释比例 | 施用方法 | 备注</b>。名称是必填项，其它可空。靶标多项用顿号(、)。<b>稀释比例</b>任意文字（数字/中文/英文/百分比都行；多种用 <code>、</code> / <code>,</code> / <code>/</code> 分隔）。列分隔符支持制表符(从 Excel 直接复制)、竖线 <code>|</code>、或半角逗号 <code>,</code>。</p>
+    <textarea id="drugImportText" rows="8" placeholder="例如（用竖线分隔）：&#10;拜耳拜灭|蟑螂、蚂蚁|1:100、1:200|滞留喷洒|德国进口&#10;奋斗呐|苍蝇、蚊子|原液 / 5g/L|空间喷洒|&#10;凯奇|老鼠|RTU|投放|即用型&#10;或直接从 Excel 复制（自动按制表符分隔）"></textarea>
     <p class="note" id="drugImportErr" style="color:var(--red)"></p>
     <div id="drugImportPreview"></div>
     <div class="btn-row">
@@ -352,13 +352,12 @@ function closeDrugModal(){ document.getElementById("drugModal").style.display="n
 function saveDrug(){
   const name=document.getElementById("dName").value.trim();
   const targets=document.getElementById("dTargets").value.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
-  const dilutionList=document.getElementById("dDilution").value.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
+  const dilutionList=document.getElementById("dDilution").value.split(/[、,，\/\s]+/).map(s=>s.trim()).filter(Boolean);
   const method=document.getElementById("dMethod").value.trim();
   const note=document.getElementById("dNote").value.trim();
   let err=null;
   if(!name) err="药品名称不能为空";
   else for(const ex of drugs){ if(ex.id!==editingDrugId && ex.name.toLowerCase()===name.toLowerCase()){ err="药品名称已存在，不可重复"; break; } }
-  if(!err){ for(const d of dilutionList){ if(!isValidNum(d)){ err="稀释比例格式不正确："+d+"（应为数字或比例，如 1:50）"; break; } } }
   if(err){ document.getElementById("drugErr").textContent=err; return; }
   const payload={ name, targets, ratio:{dilution:dilutionList,method}, note };
   const job = editingDrugId ? apiUpdDrug(editingDrugId, payload) : apiAddDrug(payload);
@@ -417,7 +416,7 @@ function parseDrugImport(){
     const name = (parts[0]||"").trim();
     const targetsRaw = (parts[1]||"").trim();
     const targets = targetsRaw.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
-    const dilutionList = (parts[2]||"").split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
+    const dilutionList = (parts[2]||"").split(/[、,，\/\s]+/).map(s=>s.trim()).filter(Boolean);
     const method = (parts[3]||"").trim();
     const note = (parts[4]||"").trim();
 
@@ -425,7 +424,6 @@ function parseDrugImport(){
     if(!name){ status="skip"; msg="跳过：药品名称为空"; }
     else if(existNames.has(name.toLowerCase())){ status="skip"; msg="跳过：名称已存在"; }
     else if(seenInBatch.has(name.toLowerCase())){ status="skip"; msg="跳过：本次列表内有重名"; }
-    else{ for(const d of dilutionList){ if(!isValidNum(d)){ status="skip"; msg="跳过：稀释比例格式错误："+d; break; } } }
     if(name) seenInBatch.add(name.toLowerCase());
 
     importPreviewRows.push({name, targets, dilution: dilutionList, method, note, status, msg});
