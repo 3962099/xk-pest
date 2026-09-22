@@ -88,7 +88,7 @@
     <h2>服务商信息</h2>
     <div class="prov">
       <label style="margin:0">服务商名称</label>
-      <input id="providerName" value="能多洁" placeholder="如：能多洁">
+      <input id="providerName" value="能多洁（中国）环境科技有限公司" placeholder="如：能多洁">
       <span class="note" style="margin:0">将显示在导出与确认单上</span>
     </div>
   </div>
@@ -107,7 +107,7 @@
           <datalist id="facList">
             <option>必旺</option><option>大旺</option><option>祥旺</option><option>祥旺A3</option>
             <option>永旺</option><option>立旺</option><option>明旺</option><option>明旺利乐</option>
-            <option>明旺铁罐利乐</option><option>旺旺</option><option>旺旺立旺</option><option>宿舍</option>
+            <option>旺旺</option><option>旺旺立旺</option><option>宿舍</option>
           </datalist>
         </div>
         <div><label>范围</label><input id="fScope" placeholder="如：车间 / 干部楼 / 绿化带" required></div>
@@ -118,7 +118,19 @@
             <option>滞留+烟雾</option><option>滞留</option><option>烟雾</option><option>其他</option>
           </select>
         </div>
-        <div><label>使用药品</label><input id="fDrug" placeholder="如：残杀威 / 清氛"></div>
+        <div><label>药品名称</label><input id="fDrugName" placeholder="如：残杀威 / 清氛"></div>
+      </div>
+      <div class="grid2">
+        <div><label>靶标生物</label><input id="fTarget" placeholder="如：蟑螂 / 鼠"></div>
+        <div><label>配比方式</label><input id="fRatio" placeholder="如：1:50"></div>
+      </div>
+      <div class="grid2">
+        <div><label>带入数量</label><input id="fBringIn" placeholder="如：2 瓶"></div>
+        <div><label>使用量</label><input id="fUsed" placeholder="如：1 瓶"></div>
+      </div>
+      <div class="grid2">
+        <div><label>带出废弃物料 / 包装</label><input id="fWaste" placeholder="如：空瓶 1"></div>
+        <div><label>剩余数量</label><input id="fRemain" placeholder="如：1 瓶"></div>
       </div>
       <label>备注</label><textarea id="fNote" rows="2" placeholder="特殊情况说明（选填）"></textarea>
       <div class="btn-row">
@@ -159,7 +171,7 @@
 /* ============ 数据层（双模式：有后台用后台，无后台用本机） ============ */
 let records = [];
 let confirmations = {};
-let providerName = "能多洁";
+let providerName = "能多洁（中国）环境科技有限公司";
 let currentDate = null;
 let API_OK = false;   // 是否连上共享后台
 
@@ -217,7 +229,13 @@ document.getElementById("recForm").addEventListener("submit", e=>{
     factory: document.getElementById("fFactory").value.trim(),
     scope: document.getElementById("fScope").value.trim(),
     method: document.getElementById("fMethod").value,
-    drug: document.getElementById("fDrug").value.trim(),
+    drugName: document.getElementById("fDrugName").value.trim(),
+    target: document.getElementById("fTarget").value.trim(),
+    ratio: document.getElementById("fRatio").value.trim(),
+    bringIn: document.getElementById("fBringIn").value.trim(),
+    used: document.getElementById("fUsed").value.trim(),
+    waste: document.getElementById("fWaste").value.trim(),
+    remain: document.getElementById("fRemain").value.trim(),
     note: document.getElementById("fNote").value.trim()
   };
   if(!r.date||!r.time||!r.factory||!r.scope){ toast("请填齐必填项"); return; }
@@ -230,7 +248,13 @@ document.getElementById("recForm").addEventListener("submit", e=>{
 function resetForm(){
   document.getElementById("fFactory").value="";
   document.getElementById("fScope").value="";
-  document.getElementById("fDrug").value="";
+  document.getElementById("fDrugName").value="";
+  document.getElementById("fTarget").value="";
+  document.getElementById("fRatio").value="";
+  document.getElementById("fBringIn").value="";
+  document.getElementById("fUsed").value="";
+  document.getElementById("fWaste").value="";
+  document.getElementById("fRemain").value="";
   document.getElementById("fNote").value="";
   document.getElementById("fDate").value = todayStr();
   document.getElementById("fTime").value = "09:00";
@@ -265,10 +289,10 @@ function renderDay(d){
     </div>`;
   if(list.length===0){ html += '<div class="empty">当天暂无记录</div>'; }
   else{
-    html += '<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>方式</th><th>药品</th><th>备注</th><th></th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量</th><th>带出废弃物料/包装</th><th>剩余数量</th><th>备注</th><th></th></tr></thead><tbody>';
     list.forEach(r=>{
       html += `<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td>
-        <td>${esc(r.method)}</td><td>${esc(r.drug)||'-'}</td><td>${esc(r.note)||'-'}</td>
+        <td>${esc(r.method)}</td><td>${esc(r.drugName)||'-'}</td><td>${esc(r.target)||'-'}</td><td>${esc(r.ratio)||'-'}</td><td>${esc(r.bringIn)||'-'}</td><td>${esc(r.used)||'-'}</td><td>${esc(r.waste)||'-'}</td><td>${esc(r.remain)||'-'}</td><td>${esc(r.note)||'-'}</td>
         <td><button class="danger" style="padding:4px 8px;font-size:12px" onclick="delRec('${r.id}')">删</button></td></tr>`;
     });
     html += '</tbody></table>';
@@ -365,8 +389,8 @@ function printDay(d){
   const c = confirmations[d] || {};
   let h = `<h2 style="text-align:center">虫控消杀服务确认单</h2>`;
   h += `<p><b>服务商：</b>${esc(providerName)}　<b>日期：</b>${d}　<b>状态：</b>${c.confirmed?'已双方签名':'待签名'}</p>`;
-  h += `<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>使用药品</th><th>备注</th></tr></thead><tbody>`;
-  list.forEach(r=>{ h+=`<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td><td>${esc(r.method)}</td><td>${esc(r.drug)||'-'}</td><td>${esc(r.note)||'-'}</td></tr>`; });
+  h += `<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量</th><th>带出废弃物料/包装</th><th>剩余数量</th><th>备注</th></tr></thead><tbody>`;
+  list.forEach(r=>{ h+=`<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td><td>${esc(r.method)}</td><td>${esc(r.drugName)||'-'}</td><td>${esc(r.target)||'-'}</td><td>${esc(r.ratio)||'-'}</td><td>${esc(r.bringIn)||'-'}</td><td>${esc(r.used)||'-'}</td><td>${esc(r.waste)||'-'}</td><td>${esc(r.remain)||'-'}</td><td>${esc(r.note)||'-'}</td></tr>`; });
   h += `</tbody></table>`;
   h += `<div style="display:flex;justify-content:space-between;margin-top:30px">
     <div><b>服务商签名：</b><br>${c.provider?.img?`<img src="${c.provider.img}" height="60">`:'(未签)'}<br>姓名：${esc(c.provider?.name||'')}</div>
@@ -380,19 +404,19 @@ function printDay(d){
 /* ============ 导出 Excel ============ */
 function exportExcel(){
   if(records.length===0){ toast("暂无数据可导出"); return; }
-  const header = ["消杀日期","工厂/区域","消杀时间","范围","消杀方式","使用药品","备注",
+  const header = ["消杀日期","工厂/区域","消杀时间","范围","消杀方式","药品名称","靶标生物","配比方式","带入数量","使用量","带出废弃物料/包装","剩余数量","备注",
     "确认状态","服务商签名人","我司确认人","确认日期"];
   const data = [header];
   const sorted = [...records].sort((a,b)=> a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
   sorted.forEach(r=>{
     const c = confirmations[r.date] || {};
-    data.push([ r.date, r.factory, r.time, r.scope, r.method, r.drug, r.note,
+    data.push([ r.date, r.factory, r.time, r.scope, r.method, r.drugName, r.target, r.ratio, r.bringIn, r.used, r.waste, r.remain, r.note,
       c.confirmed?"已双方签名":"待签名", c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
   });
   try{
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws["!cols"] = [{wch:12},{wch:14},{wch:10},{wch:16},{wch:12},{wch:12},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
+    ws["!cols"] = [{wch:12},{wch:14},{wch:10},{wch:16},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12},{wch:10},{wch:18},{wch:12},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
     XLSX.utils.book_append_sheet(wb, ws, "消杀确认记录");
     XLSX.writeFile(wb, "消杀确认记录_"+todayStr()+".xlsx");
     toast("Excel 已导出");
