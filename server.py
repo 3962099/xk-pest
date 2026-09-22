@@ -46,6 +46,7 @@ def ensure():
     k.execute(adapt("CREATE TABLE IF NOT EXISTS records(id TEXT PRIMARY KEY, data TEXT, created_at TEXT)"))
     k.execute(adapt("CREATE TABLE IF NOT EXISTS confirmations(date TEXT PRIMARY KEY, data TEXT)"))
     k.execute(adapt("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)"))
+    k.execute(adapt("CREATE TABLE IF NOT EXISTS drugs(id TEXT PRIMARY KEY, data TEXT)"))
     c.commit(); c.close()
 
 def get_meta(kk, d=None):
@@ -65,8 +66,10 @@ def read_state():
     crecs = [json.loads(r[0]) for r in k.fetchall()]
     k.execute(adapt("SELECT date,data FROM confirmations"))
     conf = {d: json.loads(v) for d, v in k.fetchall()}
+    k.execute(adapt("SELECT data FROM drugs ORDER BY id"))
+    cdr = [json.loads(r[0]) for r in k.fetchall()]
     c.close()
-    return {"provider": get_meta("provider", "能多洁"), "records": crecs, "confirmations": conf}
+    return {"provider": get_meta("provider", "能多洁"), "records": crecs, "confirmations": conf, "drugs": cdr}
 
 @app.route("/")
 def index():
@@ -136,6 +139,61 @@ def provider():
         except Exception:
             pass
     return jsonify({"provider": get_meta("provider", "能多洁")})
+
+# ===== 药品库 CRUD（多款药品独立实体） =====
+def list_drugs():
+    c = conn(); k = cur(c)
+    k.execute(adapt("SELECT data FROM drugs ORDER BY id"))
+    rows = [json.loads(r[0]) for r in k.fetchall()]; c.close()
+    return rows
+
+@app.route("/api/drugs", methods=["GET"])
+def get_drugs():
+    return jsonify(list_drugs())
+
+@app.route("/api/drugs", methods=["POST"])
+def create_drug():
+    try:
+        d = request.get_json(force=True)
+    except Exception:
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    name = (d.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "msg": "药品名称不能为空"}), 400
+    for ex in list_drugs():
+        if ex.get("name", "").strip().lower() == name.lower():
+            return jsonify({"ok": False, "msg": "药品名称已存在，不可重复"}), 400
+    did = d.get("id") or ("D" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + os.urandom(2).hex())
+    d["id"] = did; d["name"] = name
+    c = conn(); k = cur(c)
+    k.execute(adapt("INSERT INTO drugs(id,data) VALUES(?,?)"), (did, json.dumps(d, ensure_ascii=False)))
+    c.commit(); c.close()
+    return jsonify({"ok": True, "drug": d})
+
+@app.route("/api/drugs/<did>", methods=["PUT"])
+def update_drug(did):
+    try:
+        d = request.get_json(force=True)
+    except Exception:
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    name = (d.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "msg": "药品名称不能为空"}), 400
+    for ex in list_drugs():
+        if ex.get("id") != did and ex.get("name", "").strip().lower() == name.lower():
+            return jsonify({"ok": False, "msg": "药品名称已存在，不可重复"}), 400
+    d["id"] = did; d["name"] = name
+    c = conn(); k = cur(c)
+    k.execute(adapt("UPDATE drugs SET data=? WHERE id=?"), (json.dumps(d, ensure_ascii=False), did))
+    c.commit(); c.close()
+    return jsonify({"ok": True, "drug": d})
+
+@app.route("/api/drugs/<did>", methods=["DELETE"])
+def delete_drug(did):
+    c = conn(); k = cur(c)
+    k.execute(adapt("DELETE FROM drugs WHERE id=?"), (did,))
+    c.commit(); c.close()
+    return jsonify({"ok": True})
 
 # 清空全部数据（管理用，需谨慎）
 @app.route("/api/state", methods=["DELETE"])
