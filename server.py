@@ -145,6 +145,9 @@ def reset_state():
     c.commit(); c.close()
     return jsonify({"ok": True})
 
+# gunicorn 方式启动时不会执行 __main__，建表必须在模块加载时完成
+ensure()
+
 if __name__ == "__main__":
     ensure()
     port = int(os.environ.get("PORT", 5000))
