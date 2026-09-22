@@ -176,13 +176,15 @@
           ⚙ ③ 数据管理（点击展开 · 需管理员密码）
         </summary>
         <div id="adminContent" style="display:none; margin-top:10px">
-          <div class="btn-row">
-            <button onclick="exportExcel()">⬇ 导出 Excel（全部）</button>
+          <div class="btn-row" style="margin-bottom:10px">
+            <button id="refreshBtn" onclick="refreshFromCloud()">🔄 刷新云端数据</button>
+            <button class="ghost" onclick="exportExcel()">⬇ 导出 Excel（全部）</button>
             <button class="ghost" onclick="exportJSON()">⬇ 备份数据(JSON)</button>
+            <button class="ghost" onclick="exportDrugs()">💾 仅导出药品清单</button>
             <button class="ghost" onclick="importJSON()">⬆ 导入备份</button>
             <button class="danger" onclick="clearAll()">清空全部数据</button>
           </div>
-          <p class="note">数据保存在云端（固定网址，能多洁手机随处可填并自动上传）；你本机<b>开机后会自动把新记录同步进企微智能表格</b>。也可「备份数据(JSON)」留底。导出 Excel 可在电脑用 WPS / Excel 打开。</p>
+          <p class="note">数据保存在云端（固定网址，能多洁手机随处可填并自动上传）。<b>本机 Mac</b> 打开本页后点「🔄 刷新云端数据」可拉取最新记录与药品，再「导出 Excel」即可。也可「备份数据(JSON)」留底。导出 Excel 可在电脑用 WPS / Excel 打开。</p>
         </div>
       </details>
       <input type="file" id="fileInput" accept=".json" style="display:none" onchange="doImport(event)">
@@ -805,6 +807,37 @@ adminPanel.addEventListener("toggle", function(){
     }
   }
 });
+
+/* 从云端拉取最新记录/药品（不依赖 goagent 服务端推送，本机主动取） */
+async function refreshFromCloud(){
+  const btn = document.getElementById("refreshBtn");
+  if(btn){ btn.disabled="disabled"; btn.textContent="🔄 刷新中…"; }
+  try{
+    const r = await fetch(API("/api/state"));
+    if(r.ok){
+      const s = await r.json();
+      if(s && typeof s === "object" && Array.isArray(s.records)){
+        API_OK = true;
+        providerName = s.provider || providerName;
+        confirmations = s.confirmations || {};
+        const oldRecCount = records.length;
+        const oldDrugCount = drugs.length;
+        records = s.records || [];
+        drugs = s.drugs || [];
+        renderPicker(); render(); renderDrugs();
+        const recDiff = records.length - oldRecCount;
+        const drugDiff = drugs.length - oldDrugCount;
+        const parts = [];
+        if(recDiff !== 0) parts.push(`记录 ${recDiff>0?"+":""}${recDiff}`);
+        if(drugDiff !== 0) parts.push(`药品 ${drugDiff>0?"+":""}${drugDiff}`);
+        toast(`已刷新：当前 ${records.length} 条记录 / ${drugs.length} 款药品` + (parts.length?`（${parts.join("，")}）`:""));
+      } else {
+        toast("⚠ 云端数据格式异常");
+      }
+    } else { toast("⚠ 刷新失败："+r.status); }
+  }catch(e){ toast("⚠ 刷新失败："+e.message); }
+  if(btn){ btn.disabled=""; btn.textContent="🔄 刷新云端数据"; }
+}
 
 boot();
 </script>
