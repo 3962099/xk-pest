@@ -56,7 +56,7 @@
   th{background:#f0f4f0;font-weight:600}
   .sign-box{border:1px dashed var(--line);border-radius:10px;padding:12px;margin-top:10px;background:#fafbfa}
   .sign-box h3{margin:0 0 8px;font-size:14px}
-  canvas{border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;max-width:340px;height:120px;touch-action:none}
+  canvas{border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;max-width:600px;height:200px;touch-action:none}
   .status{display:inline-block;font-size:12px;padding:3px 10px;border-radius:20px;font-weight:600}
   .status.ok{background:#e6f4ea;color:var(--green-d)}
   .status.wait{background:#fdeede;color:var(--amber)}
@@ -611,7 +611,7 @@ function renderDay(d){
     <div class="sign-box">
       <h3>服务商签名 <span class="note">(消杀方)</span></h3>
       <input id="pName" placeholder="服务商负责人姓名" value="${c.provider?.name||''}">
-      <div style="margin:8px 0"><canvas id="padP" width="320" height="120"></canvas></div>
+      <div style="margin:8px 0"><canvas id="padP" width="600" height="200"></canvas></div>
       <div class="btn-row" style="margin-top:4px">
         <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padP')">清除签名</button>
       </div>
@@ -619,7 +619,7 @@ function renderDay(d){
     <div class="sign-box">
       <h3>我司签名 <span class="note">(旺旺确认人)</span></h3>
       <input id="cName" placeholder="我司确认人姓名" value="${c.company?.name||''}">
-      <div style="margin:8px 0"><canvas id="padC" width="320" height="120"></canvas></div>
+      <div style="margin:8px 0"><canvas id="padC" width="600" height="200"></canvas></div>
       <div class="btn-row" style="margin-top:4px">
         <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padC')">清除签名</button>
       </div>
@@ -706,8 +706,8 @@ function printDay(d){
     h += `</tbody></table>`;
   });
   h += `<div style="display:flex;justify-content:space-between;margin-top:30px">
-    <div><b>服务商签名：</b><br>${c.provider?.img?`<img src="${c.provider.img}" height="60">`:'(未签)'}<br>姓名：${esc(c.provider?.name||'')}</div>
-    <div><b>我司签名：</b><br>${c.company?.img?`<img src="${c.company.img}" height="60">`:'(未签)'}<br>姓名：${esc(c.company?.name||'')}</div>
+    <div><b>服务商签名：</b><br>${c.provider?.img?`<img src="${c.provider.img}" height="80">`:'(未签)'}<br>姓名：${esc(c.provider?.name||'')}</div>
+    <div><b>我司签名：</b><br>${c.company?.img?`<img src="${c.company.img}" height="80">`:'(未签)'}<br>姓名：${esc(c.company?.name||'')}</div>
   </div>`;
   if(c.confirmed) h += `<p style="margin-top:14px;color:#2e7d32">确认时间：${c.confirmTs}</p>`;
   const area=document.getElementById("printArea"); area.innerHTML=h;
