@@ -188,10 +188,11 @@
   <div class="sec" id="sec-drugs">
     <div class="card">
       <h2>药品库 <span class="tag">可增删改</span></h2>
-      <p class="note">这里维护一份药品清单：每款药独立记录「名称 / 适用靶标生物 / 配比方式 / 备注」。填单时从清单里选择，自动带出靶标与配比，不用重复填写。</p>
+      <p class="note">这里维护一份药品清单：每款药记录「名称 / 适用靶标生物 / 稀释比例 / 施用方法 / 备注」。填单时从清单里选择，自动带出靶标与配比。</p>
       <div class="search">
         <input id="drugSearch" placeholder="搜索药品名称或靶标生物" oninput="renderDrugs()">
         <button class="ghost" onclick="openDrugModal()">＋ 新增药品</button>
+        <button class="ghost" onclick="openDrugImportModal()">⬆ 导入清单</button>
       </div>
       <div id="drugList"></div>
     </div>
@@ -206,11 +207,7 @@
     <label>药品名称 *</label><input id="dName" placeholder="如：残杀威">
     <label>适用靶标生物（多个用顿号 / 逗号分隔）</label><input id="dTargets" placeholder="如：蟑螂、蚊、鼠">
     <div class="grid2">
-      <div><label>剂量</label><input id="dDose" placeholder="如：200"></div>
       <div><label>稀释比例</label><input id="dDilution" placeholder="如：1:50"></div>
-    </div>
-    <div class="grid2">
-      <div><label>单位 *</label><input id="dUnit" placeholder="如：mL / L / g"></div>
       <div><label>施用方法</label><input id="dMethod" placeholder="如：滞留喷洒"></div>
     </div>
     <label>备注</label><input id="dNote" placeholder="选填">
@@ -218,6 +215,23 @@
     <div class="btn-row">
       <button onclick="saveDrug()">保存</button>
       <button class="ghost" onclick="closeDrugModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量导入药品弹窗 -->
+<div id="drugImportModal" class="modal-mask" style="display:none">
+  <div class="modal" style="max-width:780px">
+    <h3>导入药品清单</h3>
+    <p class="note">在 Excel/WPS/记事本里整理好药品清单（每行一款药），复制后粘到框里 → 点「解析预览」检查 → 没问题就点「确认导入」。</p>
+    <p class="note">列顺序：<b>药品名称 | 适用靶标 | 稀释比例 | 施用方法 | 备注</b>。名称是必填项，其它可空。靶标多项用顿号(、)。分隔符支持制表符(从 Excel 直接复制)、竖线 <code>|</code>、或半角逗号 <code>,</code>。</p>
+    <textarea id="drugImportText" rows="8" placeholder="例如（用竖线分隔）：&#10;拜耳拜灭|蟑螂、蚂蚁|1:100|滞留喷洒|德国进口&#10;奋斗呐|苍蝇、蚊子|1:200|空间喷洒|&#10;或直接从 Excel 复制（自动按制表符分隔）"></textarea>
+    <p class="note" id="drugImportErr" style="color:var(--red)"></p>
+    <div id="drugImportPreview"></div>
+    <div class="btn-row">
+      <button onclick="parseDrugImport()">解析预览</button>
+      <button class="ghost" onclick="document.getElementById('drugImportText').value=''; document.getElementById('drugImportPreview').innerHTML=''; document.getElementById('drugImportErr').textContent='';">清空</button>
+      <button class="ghost" onclick="closeDrugImportModal()">取消</button>
     </div>
   </div>
 </div>
@@ -328,9 +342,7 @@ function openDrugModal(id){
   const d = id? drugs.find(x=>x.id===id):null;
   document.getElementById("dName").value = d?d.name:"";
   document.getElementById("dTargets").value = d?(d.targets||[]).join("、"):"";
-  document.getElementById("dDose").value = d?(d.ratio?.dose||""):"";
   document.getElementById("dDilution").value = d?(d.ratio?.dilution||""):"";
-  document.getElementById("dUnit").value = d?(d.ratio?.unit||""):"";
   document.getElementById("dMethod").value = d?(d.ratio?.method||""):"";
   document.getElementById("dNote").value = d?(d.note||""):"";
   document.getElementById("drugErr").textContent="";
@@ -340,19 +352,15 @@ function closeDrugModal(){ document.getElementById("drugModal").style.display="n
 function saveDrug(){
   const name=document.getElementById("dName").value.trim();
   const targets=document.getElementById("dTargets").value.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
-  const dose=document.getElementById("dDose").value.trim();
   const dilution=document.getElementById("dDilution").value.trim();
-  const unit=document.getElementById("dUnit").value.trim();
   const method=document.getElementById("dMethod").value.trim();
   const note=document.getElementById("dNote").value.trim();
   let err=null;
   if(!name) err="药品名称不能为空";
   else for(const ex of drugs){ if(ex.id!==editingDrugId && ex.name.toLowerCase()===name.toLowerCase()){ err="药品名称已存在，不可重复"; break; } }
-  if(!err && !unit) err="单位不能为空（如 mL / L / g）";
-  if(!err && dose && !isValidNum(dose)) err="剂量格式不正确（应为数字或比例，如 200 或 1:50）";
   if(!err && dilution && !isValidNum(dilution)) err="稀释比例格式不正确（应为数字或比例，如 1:50）";
   if(err){ document.getElementById("drugErr").textContent=err; return; }
-  const payload={ name, targets, ratio:{dose,dilution,unit,method}, note };
+  const payload={ name, targets, ratio:{dilution,method}, note };
   const job = editingDrugId ? apiUpdDrug(editingDrugId, payload) : apiAddDrug(payload);
   job.then(()=>{ closeDrugModal(); renderPicker(); renderDrugs(); toast(editingDrugId?"已更新":"已新增"); })
      .catch(()=>toast("⚠ 保存失败"));
@@ -362,6 +370,98 @@ function deleteDrug(id){
   if(!confirm("确定删除药品「"+d.name+"」？\n已填记录中该药的信息会保留（快照），不受影响。")) return;
   apiDelDrug(id).then(()=>{ drugs=drugs.filter(x=>x.id!==id); formDrugs=formDrugs.filter(x=>x.drugId!==id);
     renderPicker(); renderDrugs(); renderFormDrugs(); toast("已删除"); }).catch(()=>toast("⚠ 删除失败"));
+}
+
+/* ============ 批量导入药品清单 ============ */
+let importPreviewRows = []; // {name, targets, dilution, method, note, status, msg}
+
+function openDrugImportModal(){
+  document.getElementById("drugImportText").value = "";
+  document.getElementById("drugImportErr").textContent = "";
+  document.getElementById("drugImportPreview").innerHTML = "";
+  importPreviewRows = [];
+  document.getElementById("drugImportModal").style.display = "flex";
+}
+function closeDrugImportModal(){ document.getElementById("drugImportModal").style.display = "none"; }
+
+function splitImportLine(line){
+  // 优先级：制表符 > 竖线 > 半角逗号。半角逗号模式下，若字段数超过 5，尝试全角逗号；都不行再退回竖线。
+  if(line.indexOf("\t") >= 0) return line.split("\t");
+  // 计算三种分隔符出现的次数，取最多的那种
+  const cn = (line.match(/｜/g)||[]).length + (line.match(/\|/g)||[]).length;
+  const comma = (line.match(/,/g)||[]).length;
+  if(cn >= comma) return line.split(/[｜|]/).map(s=>s.trim());
+  return line.split(",").map(s=>s.trim());
+}
+
+function parseDrugImport(){
+  const txt = document.getElementById("drugImportText").value.trim();
+  document.getElementById("drugImportErr").textContent = "";
+  if(!txt){ document.getElementById("drugImportErr").textContent = "请先粘贴药品清单"; return; }
+
+  // 检测首行是否为表头（包含"药品名称"或"名称"），若匹配则跳过
+  let lines = txt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  let skipHeader = false;
+  if(lines.length && /(药品名称|^名称$|^name$)/i.test(lines[0])){
+    // 检查首��是否同时缺少其他必填列名（若同时具备逗号分隔的多个短词，更像数据）
+    if(lines[0].split(/[,|\t]/).length >= 3) skipHeader = true;
+  }
+  if(skipHeader) lines = lines.slice(1);
+
+  const existNames = new Set(drugs.map(d => (d.name||"").toLowerCase()));
+  const seenInBatch = new Set();
+  importPreviewRows = [];
+
+  for(const line of lines){
+    const parts = splitImportLine(line);
+    const name = (parts[0]||"").trim();
+    const targetsRaw = (parts[1]||"").trim();
+    const targets = targetsRaw.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
+    const dilution = (parts[2]||"").trim();
+    const method = (parts[3]||"").trim();
+    const note = (parts[4]||"").trim();
+
+    let status="ok", msg="新增";
+    if(!name){ status="skip"; msg="跳过：药品名称为空"; }
+    else if(existNames.has(name.toLowerCase())){ status="skip"; msg="跳过：名称已存在"; }
+    else if(seenInBatch.has(name.toLowerCase())){ status="skip"; msg="跳过：本次列表内有重名"; }
+    else if(dilution && !isValidNum(dilution)){ status="skip"; msg="跳过：稀释比例格式错误"; }
+    if(name) seenInBatch.add(name.toLowerCase());
+
+    importPreviewRows.push({name, targets, dilution, method, note, status, msg});
+  }
+
+  const okCount = importPreviewRows.filter(r=>r.status==="ok").length;
+  const skipCount = importPreviewRows.length - okCount;
+  let html = `<p class="note">共解析 <b>${importPreviewRows.length}</b> 行：可新增 <b style="color:var(--green)">${okCount}</b> 条，将跳过 <b style="color:var(--red)">${skipCount}</b> 条</p>`;
+  html += `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f3f4f6"><th style="padding:6px;text-align:left">状态</th><th style="padding:6px;text-align:left">名称</th><th style="padding:6px;text-align:left">靶标</th><th style="padding:6px;text-align:left">稀释</th><th style="padding:6px;text-align:left">方法</th><th style="padding:6px;text-align:left">备注</th></tr></thead><tbody>`;
+  for(const r of importPreviewRows){
+    const color = r.status==="ok" ? "var(--green)" : "var(--red)";
+    html += `<tr style="border-top:1px solid #eee"><td style="padding:6px;color:${color}">${esc(r.msg)}</td><td style="padding:6px">${esc(r.name)}</td><td style="padding:6px">${esc(r.targets.join("、"))}</td><td style="padding:6px">${esc(r.dilution)}</td><td style="padding:6px">${esc(r.method)}</td><td style="padding:6px">${esc(r.note)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  if(okCount > 0){
+    html += `<div class="btn-row" style="margin-top:12px"><button onclick="executeDrugImport()">确认导入 ${okCount} 条</button></div>`;
+  }
+  document.getElementById("drugImportPreview").innerHTML = html;
+}
+
+async function executeDrugImport(){
+  const toImport = importPreviewRows.filter(r=>r.status==="ok");
+  if(toImport.length === 0){ toast("无可导入条目"); return; }
+  let ok=0, fail=0;
+  for(const r of toImport){
+    const payload = { name: r.name, targets: r.targets, ratio: {dilution: r.dilution, method: r.method}, note: r.note };
+    try{
+      const resp = await fetch(API("/api/drugs"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const j = await resp.json();
+      if(j && j.ok){ drugs.push(j.drug); ok++; } else { fail++; }
+    }catch(e){ fail++; }
+  }
+  renderPicker(); renderDrugs();
+  toast(`导入完成：成功 ${ok} 条，失败 ${fail} 条`);
+  if(fail === 0){ closeDrugImportModal(); }
+  else { document.getElementById("drugImportErr").textContent = `有 ${fail} 条导入失败，请检查重名或网络`; }
 }
 
 /* ============ 填单：多款药 ============ */
