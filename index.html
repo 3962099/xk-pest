@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>虫控消杀服务确认平台</title>
+<script src="./xlsx.full.min.js"></script>
+<script>
+  // CDN 兜底：若本地 xlsx 文件缺失，尝试从网络加载
+  if (typeof XLSX === "undefined") {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"><\/script>');
+  }
+</script>
+<style>
+  :root{
+    --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
+    --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.5;font-size:15px}
+  header{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;
+    padding:14px 16px;position:sticky;top:0;z-index:10}
+  header h1{margin:0;font-size:18px}
+  header .sub{font-size:12px;opacity:.9;margin-top:2px}
+  .wrap{max-width:880px;margin:0 auto;padding:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .card h2{margin:0 0 12px;font-size:16px;display:flex;align-items:center;gap:8px}
+  .card h2 .tag{font-size:11px;background:var(--green);color:#fff;border-radius:6px;padding:2px 8px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);
+    border-radius:8px;font-size:15px;background:#fff;color:var(--txt)}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:11px 16px;
+    background:var(--green);color:#fff;font-weight:600}
+  button:hover{background:var(--green-d)}
+  button.ghost{background:#fff;color:var(--green);border:1px solid var(--green)}
+  button.danger{background:#fff;color:var(--red);border:1px solid var(--red)}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .date-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px}
+  .date-tab{flex:0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:20px;
+    background:#fff;font-size:13px;white-space:nowrap}
+  .date-tab.active{background:var(--green);color:#fff;border-color:var(--green)}
+  .date-tab .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:6px}
+  .dot.ok{background:#43a047}.dot.wait{background:var(--amber)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{border:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+  th{background:#f0f4f0;font-weight:600}
+  .sign-box{border:1px dashed var(--line);border-radius:10px;padding:12px;margin-top:10px;background:#fafbfa}
+  .sign-box h3{margin:0 0 8px;font-size:14px}
+  canvas{border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;max-width:340px;height:120px;touch-action:none}
+  .status{display:inline-block;font-size:12px;padding:3px 10px;border-radius:20px;font-weight:600}
+  .status.ok{background:#e6f4ea;color:var(--green-d)}
+  .status.wait{background:#fdeede;color:var(--amber)}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  .empty{color:var(--muted);text-align:center;padding:24px 0;font-size:14px}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);
+    background:rgba(0,0,0,.85);color:#fff;padding:10px 18px;border-radius:24px;font-size:14px;
+    opacity:0;transition:.3s;z-index:99;pointer-events:none}
+  .toast.show{opacity:1}
+  .prov{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .prov input{width:auto;flex:1;min-width:160px}
+  @media(max-width:560px){.grid3{grid-template-columns:1fr 1fr}.card{padding:12px}}
+  /* 打印确认单 */
+  #printArea{display:none}
+  @media print{
+    body *{visibility:hidden}
+    #printArea,#printArea *{visibility:visible}
+    #printArea{display:block;position:absolute;left:0;top:0;width:100%;padding:20px}
+    #printArea table{border-collapse:collapse;width:100%}
+    #printArea th,#printArea td{border:1px solid #333;padding:6px;font-size:12px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>虫控消杀服务确认平台</h1>
+  <div class="sub">外部服务商填单 · 双方当日签名 · 一键导出 Excel</div>
+</header>
+
+<div class="wrap">
+
+  <!-- 服务商名称 -->
+  <div class="card">
+    <h2>服务商信息</h2>
+    <div class="prov">
+      <label style="margin:0">服务商名称</label>
+      <input id="providerName" value="能多洁" placeholder="如：能多洁">
+      <span class="note" style="margin:0">将显示在导出与确认单上</span>
+    </div>
+  </div>
+
+  <!-- 新增记录 -->
+  <div class="card">
+    <h2>① 新增消杀记录 <span class="tag">服务商填写</span></h2>
+    <form id="recForm">
+      <div class="grid2">
+        <div><label>消杀日期</label><input type="date" id="fDate" required></div>
+        <div><label>消杀时间</label><input type="time" id="fTime" required></div>
+      </div>
+      <div class="grid2">
+        <div><label>工厂 / 区域</label>
+          <input id="fFactory" list="facList" placeholder="如：必旺 / 大旺 / 宿舍" required>
+          <datalist id="facList">
+            <option>必旺</option><option>大旺</option><option>祥旺</option><option>祥旺A3</option>
+            <option>永旺</option><option>立旺</option><option>明旺</option><option>明旺利乐</option>
+            <option>明旺铁罐利乐</option><option>旺旺</option><option>旺旺立旺</option><option>宿舍</option>
+          </datalist>
+        </div>
+        <div><label>范围</label><input id="fScope" placeholder="如：车间 / 干部楼 / 绿化带" required></div>
+      </div>
+      <div class="grid2">
+        <div><label>消杀方式</label>
+          <select id="fMethod">
+            <option>滞留+烟雾</option><option>滞留</option><option>烟雾</option><option>其他</option>
+          </select>
+        </div>
+        <div><label>使用药品</label><input id="fDrug" placeholder="如：残杀威 / 清氛"></div>
+      </div>
+      <label>备注</label><textarea id="fNote" rows="2" placeholder="特殊情况说明（选填）"></textarea>
+      <div class="btn-row">
+        <button type="submit">＋ 添加本条记录</button>
+        <button type="button" class="ghost" onclick="resetForm()">清空表单</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 当日记录与签名 -->
+  <div class="card">
+    <h2>② 当日记录与签名确认</h2>
+    <div class="date-tabs" id="dateTabs"></div>
+    <div id="dayView"></div>
+  </div>
+
+  <!-- 数据管理 -->
+  <div class="card">
+    <h2>③ 数据管理</h2>
+    <div class="btn-row">
+      <button onclick="exportExcel()">⬇ 导出 Excel（全部）</button>
+      <button class="ghost" onclick="exportJSON()">⬇ 备份数据(JSON)</button>
+      <button class="ghost" onclick="importJSON()">⬆ 导入备份</button>
+      <button class="danger" onclick="clearAll()">清空全部数据</button>
+    </div>
+    <p class="note">数据保存在云端（部署后会给你一个固定网址，能多洁手机随处可填并自动上传）；你本机<b>开机后会自动把新记录同步进企微智能表格</b>。也可「备份数据(JSON)」留底。导出 Excel 可在电脑用 WPS / Excel 打开。</p>
+    <input type="file" id="fileInput" accept=".json" style="display:none" onchange="doImport(event)">
+  </div>
+
+</div>
+
+<!-- 打印确认单区域 -->
+<div id="printArea"></div>
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+/* ============ 数据层（双模式：有后台用后台，无后台用本机） ============ */
+let records = [];
+let confirmations = {};
+let providerName = "能多洁";
+let currentDate = null;
+let API_OK = false;   // 是否连上共享后台
+
+// 云端 API 基地址：同域时为空字符串；静态镜像时由 config.js 指定
+function API(p){ return (window.XK_API_BASE || "") + p; }
+
+/* 本地模式：存浏览器；云端模式：逐条接口已在各操作中单独调用 */
+function persistLocal(){
+  localStorage.setItem("xk_records", JSON.stringify(records));
+  localStorage.setItem("xk_confirmations", JSON.stringify(confirmations));
+  localStorage.setItem("xk_provider", JSON.stringify(providerName));
+}
+async function apiAdd(r){ await fetch(API("/api/record"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(r)}); }
+async function apiDel(id){ await fetch(API("/api/record/")+encodeURIComponent(id),{method:"DELETE"}); }
+async function apiConfirm(c){ await fetch(API("/api/confirm"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(c)}); }
+async function apiProvider(n){ await fetch(API("/api/provider"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})}); }
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),1800); }
+
+/* 启动时自动判断：连上后台就用共享数据，否则用本机存储 */
+async function boot(){
+  try{
+    const r = await fetch(API("/api/state"));
+    if(r.ok){
+      const s = await r.json();
+      if(s && typeof s === "object" && Array.isArray(s.records)){
+        API_OK = true;
+        providerName = s.provider || "能多洁";
+        records = s.records || [];
+        confirmations = s.confirmations || {};
+      }
+    }
+  }catch(e){ /* 静态环境：保持本机模式 */ }
+  document.getElementById("providerName").value = providerName;
+  render();
+}
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+/* ============ 初始化 ============ */
+document.getElementById("providerName").value = providerName;
+document.getElementById("fDate").value = todayStr();
+document.getElementById("fTime").value = "09:00";
+document.getElementById("providerName").addEventListener("change", e=>{
+  providerName = e.target.value || "能多洁";
+  if(API_OK){ apiProvider(providerName).catch(()=>toast("⚠ 保存失败")); } else { persistLocal(); }
+  toast("服务商名称已保存"); });
+
+document.getElementById("recForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const r = {
+    id: uid(),
+    date: document.getElementById("fDate").value,
+    time: document.getElementById("fTime").value,
+    factory: document.getElementById("fFactory").value.trim(),
+    scope: document.getElementById("fScope").value.trim(),
+    method: document.getElementById("fMethod").value,
+    drug: document.getElementById("fDrug").value.trim(),
+    note: document.getElementById("fNote").value.trim()
+  };
+  if(!r.date||!r.time||!r.factory||!r.scope){ toast("请填齐必填项"); return; }
+  records.push(r);
+  if(API_OK){ apiAdd(r).catch(()=>toast("⚠ 提交到云端失败")); } else { persistLocal(); }
+  if(!currentDate) currentDate = r.date;
+  toast("已添加：" + r.factory + " " + r.date);
+  resetForm(); render();
+});
+function resetForm(){
+  document.getElementById("fFactory").value="";
+  document.getElementById("fScope").value="";
+  document.getElementById("fDrug").value="";
+  document.getElementById("fNote").value="";
+  document.getElementById("fDate").value = todayStr();
+  document.getElementById("fTime").value = "09:00";
+}
+
+/* ============ 渲染：日期标签 + 当日视图 ============ */
+function dateList(){ const s=[...new Set(records.map(r=>r.date))]; s.sort().reverse(); return s; }
+
+function render(){
+  const dates = dateList();
+  const tabs = document.getElementById("dateTabs");
+  if(dates.length===0){ tabs.innerHTML=""; document.getElementById("dayView").innerHTML=
+    '<div class="empty">还没有记录。请在上方「① 新增消杀记录」添加第一条。</div>'; return; }
+  if(!currentDate || !dates.includes(currentDate)) currentDate = dates[0];
+  tabs.innerHTML = dates.map(d=>{
+    const c = confirmations[d];
+    const ok = c && c.confirmed;
+    return `<div class="date-tab ${d===currentDate?'active':''}" onclick="selectDate('${d}')">
+      ${d}<span class="dot ${ok?'ok':'wait'}"></span></div>`;
+  }).join("");
+  renderDay(currentDate);
+}
+function selectDate(d){ currentDate=d; render(); }
+
+function renderDay(d){
+  const list = records.filter(r=>r.date===d).sort((a,b)=>a.time.localeCompare(b.time));
+  const c = confirmations[d] || {};
+  const view = document.getElementById("dayView");
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <strong>${d} 当日记录（${list.length} 条）</strong>
+      <span class="status ${c.confirmed?'ok':'wait'}">${c.confirmed?'✓ 双方已签名':'⏳ 待签名确认'}</span>
+    </div>`;
+  if(list.length===0){ html += '<div class="empty">当天暂无记录</div>'; }
+  else{
+    html += '<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>方式</th><th>药品</th><th>备注</th><th></th></tr></thead><tbody>';
+    list.forEach(r=>{
+      html += `<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td>
+        <td>${esc(r.method)}</td><td>${esc(r.drug)||'-'}</td><td>${esc(r.note)||'-'}</td>
+        <td><button class="danger" style="padding:4px 8px;font-size:12px" onclick="delRec('${r.id}')">删</button></td></tr>`;
+    });
+    html += '</tbody></table>';
+  }
+  // 签名区
+  html += `<div class="grid2" style="margin-top:14px">
+    <div class="sign-box">
+      <h3>服务商签名 <span class="note">(消杀方)</span></h3>
+      <input id="pName" placeholder="服务商负责人姓名" value="${c.provider?.name||''}">
+      <div style="margin:8px 0"><canvas id="padP" width="320" height="120"></canvas></div>
+      <div class="btn-row" style="margin-top:4px">
+        <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padP')">清除签名</button>
+      </div>
+    </div>
+    <div class="sign-box">
+      <h3>我司签名 <span class="note">(旺旺确认人)</span></h3>
+      <input id="cName" placeholder="我司确认人姓名" value="${c.company?.name||''}">
+      <div style="margin:8px 0"><canvas id="padC" width="320" height="120"></canvas></div>
+      <div class="btn-row" style="margin-top:4px">
+        <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padC')">清除签名</button>
+      </div>
+    </div>
+  </div>`;
+  html += `<div class="btn-row">
+      <button onclick="completeDay('${d}')">✓ 完成当日确认（双方签名）</button>
+      <button class="ghost" onclick="printDay('${d}')">🖨 打印确认单 / 存PDF</button>
+    </div>`;
+  if(c.confirmed){
+    html += `<p class="note">已于 ${c.confirmTs} 完成双方签名确认。可重新签名覆盖。</p>`;
+  }
+  view.innerHTML = html;
+  initPad(document.getElementById("padP"));
+  initPad(document.getElementById("padC"));
+  if(c.provider?.img){ drawFromData(document.getElementById("padP"), c.provider.img); }
+  if(c.company?.img){ drawFromData(document.getElementById("padC"), c.company.img); }
+}
+function esc(s){ return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
+function delRec(id){ if(!confirm("确定删除这条记录？"))return;
+  records = records.filter(r=>r.id!==id);
+  if(API_OK){ apiDel(id).catch(()=>toast("⚠ 删除失败")); } else { persistLocal(); }
+  render(); toast("已删除"); }
+
+/* ============ 签名画板 ============ */
+function initPad(canvas){
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  let drawing=false,lastX,lastY;
+  const pos = e=>{ const r=canvas.getBoundingClientRect();
+    const t=e.touches?e.touches[0]:e;
+    return {x:(t.clientX-r.left)*(canvas.width/r.width), y:(t.clientY-r.top)*(canvas.height/r.height)}; };
+  const start=e=>{ drawing=true; const p=pos(e); lastX=p.x; lastY=p.y; e.preventDefault(); };
+  const move=e=>{ if(!drawing)return; const p=pos(e);
+    ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.strokeStyle="#111";
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(p.x,p.y); ctx.stroke();
+    lastX=p.x; lastY=p.y; e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  canvas.addEventListener("mousedown",start); canvas.addEventListener("mousemove",move);
+  window.addEventListener("mouseup",end);
+  canvas.addEventListener("touchstart",start); canvas.addEventListener("touchmove",move);
+  canvas.addEventListener("touchend",end);
+}
+function clearPad(id){ const c=document.getElementById(id); const x=c.getContext("2d");
+  x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height); }
+function drawFromData(canvas, dataUrl){
+  const img=new Image(); img.onload=()=>{ const x=canvas.getContext("2d");
+    x.fillStyle="#fff"; x.fillRect(0,0,canvas.width,canvas.height); x.drawImage(img,0,0,canvas.width,canvas.height); };
+  img.src=dataUrl;
+}
+function padEmpty(canvas){ const x=canvas.getContext("2d");
+  const d=x.getImageData(0,0,canvas.width,canvas.height).data;
+  for(let i=0;i<d.length;i+=4){ if(d[i]<250||d[i+1]<250||d[i+2]<250) return false; }
+  return true; }
+
+function completeDay(d){
+  const pName=document.getElementById("pName").value.trim();
+  const cName=document.getElementById("cName").value.trim();
+  const padP=document.getElementById("padP"), padC=document.getElementById("padC");
+  if(!pName){ toast("请填写服务商负责人姓名"); return; }
+  if(!cName){ toast("请填写我司确认人姓名"); return; }
+  if(padEmpty(padP)){ toast("请让服务商在左侧签名"); return; }
+  if(padEmpty(padC)){ toast("请让我司在右侧签名"); return; }
+  confirmations[d] = {
+    confirmed:true, confirmTs: new Date().toLocaleString("zh-CN"),
+    provider:{ name:pName, img:padP.toDataURL("image/png") },
+    company:{ name:cName, img:padC.toDataURL("image/png") }
+  };
+  if(API_OK){ apiConfirm(confirmations[d]).catch(()=>toast("⚠ 同步签名失败")); } else { persistLocal(); }
+  render(); toast("✓ 当日确认完成，已双方签名");
+}
+
+/* ============ 打印确认单 ============ */
+function printDay(d){
+  const list = records.filter(r=>r.date===d).sort((a,b)=>a.time.localeCompare(b.time));
+  const c = confirmations[d] || {};
+  let h = `<h2 style="text-align:center">虫控消杀服务确认单</h2>`;
+  h += `<p><b>服务商：</b>${esc(providerName)}　<b>日期：</b>${d}　<b>状态：</b>${c.confirmed?'已双方签名':'待签名'}</p>`;
+  h += `<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>使用药品</th><th>备注</th></tr></thead><tbody>`;
+  list.forEach(r=>{ h+=`<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td><td>${esc(r.method)}</td><td>${esc(r.drug)||'-'}</td><td>${esc(r.note)||'-'}</td></tr>`; });
+  h += `</tbody></table>`;
+  h += `<div style="display:flex;justify-content:space-between;margin-top:30px">
+    <div><b>服务商签名：</b><br>${c.provider?.img?`<img src="${c.provider.img}" height="60">`:'(未签)'}<br>姓名：${esc(c.provider?.name||'')}</div>
+    <div><b>我司签名：</b><br>${c.company?.img?`<img src="${c.company.img}" height="60">`:'(未签)'}<br>姓名：${esc(c.company?.name||'')}</div>
+  </div>`;
+  if(c.confirmed) h += `<p style="margin-top:14px;color:#2e7d32">确认时间：${c.confirmTs}</p>`;
+  const area=document.getElementById("printArea"); area.innerHTML=h;
+  setTimeout(()=>window.print(),100);
+}
+
+/* ============ 导出 Excel ============ */
+function exportExcel(){
+  if(records.length===0){ toast("暂无数据可导出"); return; }
+  const header = ["消杀日期","工厂/区域","消杀时间","范围","消杀方式","使用药品","备注",
+    "确认状态","服务商签名人","我司确认人","确认日期"];
+  const data = [header];
+  const sorted = [...records].sort((a,b)=> a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  sorted.forEach(r=>{
+    const c = confirmations[r.date] || {};
+    data.push([ r.date, r.factory, r.time, r.scope, r.method, r.drug, r.note,
+      c.confirmed?"已双方签名":"待签名", c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
+  });
+  try{
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws["!cols"] = [{wch:12},{wch:14},{wch:10},{wch:16},{wch:12},{wch:12},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, ws, "消杀确认记录");
+    XLSX.writeFile(wb, "消杀确认记录_"+todayStr()+".xlsx");
+    toast("Excel 已导出");
+  }catch(e){
+    // 离线兜底：HTML 表格导出为 .xls
+    let html = '<table border="1">';
+    data.forEach(row=>{ html += "<tr>"+row.map(c=>`<td>${c??""}</td>`).join("")+"</tr>"; });
+    html += "</table>";
+    const blob = new Blob(["\ufeff"+html], {type:"application/vnd.ms-excel"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="消杀确认记录_"+todayStr()+".xls"; a.click();
+    toast("已用兼容模式导出 .xls");
+  }
+}
+
+/* ============ 备份 / 导入 ============ */
+function exportJSON(){
+  const payload = { provider:providerName, records, confirmations, exportedAt:new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="消杀数据备份_"+todayStr()+".json"; a.click(); toast("备份已下载");
+}
+function importJSON(){ document.getElementById("fileInput").click(); }
+function doImport(e){
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ try{
+    const p=JSON.parse(rd.result);
+    if(p.records) records=p.records;
+    if(p.confirmations) confirmations=p.confirmations;
+    if(p.provider) providerName=p.provider;
+    document.getElementById("providerName").value=providerName;
+    if(API_OK){ (p.records||[]).forEach(r=>apiAdd(r)); Object.entries(p.confirmations||{}).forEach(([k,v])=>apiConfirm(v)); }
+    else { persistLocal(); }
+    render(); toast("导入成功");
+  }catch(err){ toast("文件格式错误"); } };
+  rd.readAsText(f); e.target.value="";
+}
+function clearAll(){
+  if(!confirm("将清空全部消杀记录与签名，确定？建议先备份。"))return;
+  records=[]; confirmations={};
+  if(API_OK){ fetch(API("/api/state"),{method:"DELETE"}).catch(()=>{}); } else { persistLocal(); }
+  render(); toast("已清空");
+}
+
+boot();
+</script>
+</body>
+</html>
