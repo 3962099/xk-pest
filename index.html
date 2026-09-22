@@ -126,11 +126,11 @@
       </div>
       <div class="grid2">
         <div><label>带入数量</label><input id="fBringIn" placeholder="如：2 瓶"></div>
-        <div><label>使用量</label><input id="fUsed" placeholder="如：1 瓶"></div>
+        <div><label>使用量(L)</label><input id="fUsed" placeholder="如：1L"></div>
       </div>
       <div class="grid2">
         <div><label>带出废弃物料 / 包装</label><input id="fWaste" placeholder="如：空瓶 1"></div>
-        <div><label>剩余数量</label><input id="fRemain" placeholder="如：1 瓶"></div>
+        <div><label>剩余数量(L)</label><input id="fRemain" placeholder="如：1L"></div>
       </div>
       <label>备注</label><textarea id="fNote" rows="2" placeholder="特殊情况说明（选填）"></textarea>
       <div class="btn-row">
@@ -289,7 +289,7 @@ function renderDay(d){
     </div>`;
   if(list.length===0){ html += '<div class="empty">当天暂无记录</div>'; }
   else{
-    html += '<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量</th><th>带出废弃物料/包装</th><th>剩余数量</th><th>备注</th><th></th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th><th>备注</th><th></th></tr></thead><tbody>';
     list.forEach(r=>{
       html += `<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td>
         <td>${esc(r.method)}</td><td>${esc(r.drugName)||'-'}</td><td>${esc(r.target)||'-'}</td><td>${esc(r.ratio)||'-'}</td><td>${esc(r.bringIn)||'-'}</td><td>${esc(r.used)||'-'}</td><td>${esc(r.waste)||'-'}</td><td>${esc(r.remain)||'-'}</td><td>${esc(r.note)||'-'}</td>
@@ -389,7 +389,7 @@ function printDay(d){
   const c = confirmations[d] || {};
   let h = `<h2 style="text-align:center">虫控消杀服务确认单</h2>`;
   h += `<p><b>服务商：</b>${esc(providerName)}　<b>日期：</b>${d}　<b>状态：</b>${c.confirmed?'已双方签名':'待签名'}</p>`;
-  h += `<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量</th><th>带出废弃物料/包装</th><th>剩余数量</th><th>备注</th></tr></thead><tbody>`;
+  h += `<table><thead><tr><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th><th>备注</th></tr></thead><tbody>`;
   list.forEach(r=>{ h+=`<tr><td>${r.time}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td><td>${esc(r.method)}</td><td>${esc(r.drugName)||'-'}</td><td>${esc(r.target)||'-'}</td><td>${esc(r.ratio)||'-'}</td><td>${esc(r.bringIn)||'-'}</td><td>${esc(r.used)||'-'}</td><td>${esc(r.waste)||'-'}</td><td>${esc(r.remain)||'-'}</td><td>${esc(r.note)||'-'}</td></tr>`; });
   h += `</tbody></table>`;
   h += `<div style="display:flex;justify-content:space-between;margin-top:30px">
@@ -404,7 +404,7 @@ function printDay(d){
 /* ============ 导出 Excel ============ */
 function exportExcel(){
   if(records.length===0){ toast("暂无数据可导出"); return; }
-  const header = ["消杀日期","工厂/区域","消杀时间","范围","消杀方式","药品名称","靶标生物","配比方式","带入数量","使用量","带出废弃物料/包装","剩余数量","备注",
+  const header = ["消杀日期","工厂/区域","消杀时间","范围","消杀方式","药品名称","靶标生物","配比方式","带入数量","使用量(L)","带出废弃物料/包装","剩余数量(L)","备注",
     "确认状态","服务商签名人","我司确认人","确认日期"];
   const data = [header];
   const sorted = [...records].sort((a,b)=> a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
