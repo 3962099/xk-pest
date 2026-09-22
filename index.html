@@ -188,7 +188,7 @@
   <div class="sec" id="sec-drugs">
     <div class="card">
       <h2>药品库 <span class="tag">可增删改</span></h2>
-      <p class="note">这里维护一份药品清单：每款药记录「名称 / 适用靶标生物 / 稀释比例 / 施用方法 / 备注」。填单时从清单里选择，自动带出靶标与配比。</p>
+      <p class="note">这里维护一份药品清单：每款药记录「名称 / 适用靶标生物 / 稀释比例 / 施用方法 / 备注」。<b>稀释比例</b>支持多种（如 1:100 与 1:200 同时用），用顿号或逗号分隔。填单时从清单里选择，自动带出靶标与配比。</p>
       <div class="search">
         <input id="drugSearch" placeholder="搜索药品名称或靶标生物" oninput="renderDrugs()">
         <button class="ghost" onclick="openDrugModal()">＋ 新增药品</button>
@@ -207,7 +207,7 @@
     <label>药品名称 *</label><input id="dName" placeholder="如：残杀威">
     <label>适用靶标生物（多个用顿号 / 逗号分隔）</label><input id="dTargets" placeholder="如：蟑螂、蚊、鼠">
     <div class="grid2">
-      <div><label>稀释比例</label><input id="dDilution" placeholder="如：1:50"></div>
+      <div><label>稀释比例</label><input id="dDilution" placeholder="如：1:50（多种用顿号/逗号分隔，如 1:100、1:200）"></div>
       <div><label>施用方法</label><input id="dMethod" placeholder="如：滞留喷洒"></div>
     </div>
     <label>备注</label><input id="dNote" placeholder="选填">
@@ -280,7 +280,7 @@ function recordDrugs(r){
     bringIn:r.bringIn, used:r.used, waste:r.waste, remain:r.remain}];
   return [];
 }
-function ratioText(rt){ if(!rt) return "-"; const p=[]; if(rt.dose) p.push("剂量"+rt.dose); if(rt.dilution) p.push("稀释"+rt.dilution); if(rt.unit) p.push(rt.unit); if(rt.method) p.push(rt.method); return p.join(" ")||"-"; }
+function ratioText(rt){ if(!rt) return "-"; const p=[]; if(rt.dose) p.push("剂量"+rt.dose); const _dil = Array.isArray(rt.dilution) ? rt.dilution : (rt.dilution ? [rt.dilution] : []); if(_dil.length) p.push("稀释"+_dil.join("、")); if(rt.unit) p.push(rt.unit); if(rt.method) p.push(rt.method); return p.join(" ")||"-"; }
 function isValidNum(v){ return /^\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?%$/.test(v); }
 
 /* 启动时自动判断：连上后台就用共享数据，否则用本机存储 */
@@ -342,7 +342,7 @@ function openDrugModal(id){
   const d = id? drugs.find(x=>x.id===id):null;
   document.getElementById("dName").value = d?d.name:"";
   document.getElementById("dTargets").value = d?(d.targets||[]).join("、"):"";
-  document.getElementById("dDilution").value = d?(d.ratio?.dilution||""):"";
+  document.getElementById("dDilution").value = d?(Array.isArray(d.ratio?.dilution) ? d.ratio.dilution.join("、") : (d.ratio?.dilution||"")):"";
   document.getElementById("dMethod").value = d?(d.ratio?.method||""):"";
   document.getElementById("dNote").value = d?(d.note||""):"";
   document.getElementById("drugErr").textContent="";
@@ -352,15 +352,15 @@ function closeDrugModal(){ document.getElementById("drugModal").style.display="n
 function saveDrug(){
   const name=document.getElementById("dName").value.trim();
   const targets=document.getElementById("dTargets").value.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
-  const dilution=document.getElementById("dDilution").value.trim();
+  const dilutionList=document.getElementById("dDilution").value.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
   const method=document.getElementById("dMethod").value.trim();
   const note=document.getElementById("dNote").value.trim();
   let err=null;
   if(!name) err="药品名称不能为空";
   else for(const ex of drugs){ if(ex.id!==editingDrugId && ex.name.toLowerCase()===name.toLowerCase()){ err="药品名称已存在，不可重复"; break; } }
-  if(!err && dilution && !isValidNum(dilution)) err="稀释比例格式不正确（应为数字或比例，如 1:50）";
+  if(!err){ for(const d of dilutionList){ if(!isValidNum(d)){ err="稀释比例格式不正确："+d+"（应为数字或比例，如 1:50）"; break; } } }
   if(err){ document.getElementById("drugErr").textContent=err; return; }
-  const payload={ name, targets, ratio:{dilution,method}, note };
+  const payload={ name, targets, ratio:{dilution:dilutionList,method}, note };
   const job = editingDrugId ? apiUpdDrug(editingDrugId, payload) : apiAddDrug(payload);
   job.then(()=>{ closeDrugModal(); renderPicker(); renderDrugs(); toast(editingDrugId?"已更新":"已新增"); })
      .catch(()=>toast("⚠ 保存失败"));
@@ -417,7 +417,7 @@ function parseDrugImport(){
     const name = (parts[0]||"").trim();
     const targetsRaw = (parts[1]||"").trim();
     const targets = targetsRaw.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
-    const dilution = (parts[2]||"").trim();
+    const dilutionList = (parts[2]||"").split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
     const method = (parts[3]||"").trim();
     const note = (parts[4]||"").trim();
 
@@ -425,10 +425,10 @@ function parseDrugImport(){
     if(!name){ status="skip"; msg="跳过：药品名称为空"; }
     else if(existNames.has(name.toLowerCase())){ status="skip"; msg="跳过：名称已存在"; }
     else if(seenInBatch.has(name.toLowerCase())){ status="skip"; msg="跳过：本次列表内有重名"; }
-    else if(dilution && !isValidNum(dilution)){ status="skip"; msg="跳过：稀释比例格式错误"; }
+    else{ for(const d of dilutionList){ if(!isValidNum(d)){ status="skip"; msg="跳过：稀释比例格式错误："+d; break; } } }
     if(name) seenInBatch.add(name.toLowerCase());
 
-    importPreviewRows.push({name, targets, dilution, method, note, status, msg});
+    importPreviewRows.push({name, targets, dilution: dilutionList, method, note, status, msg});
   }
 
   const okCount = importPreviewRows.filter(r=>r.status==="ok").length;
@@ -437,7 +437,7 @@ function parseDrugImport(){
   html += `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f3f4f6"><th style="padding:6px;text-align:left">状态</th><th style="padding:6px;text-align:left">名称</th><th style="padding:6px;text-align:left">靶标</th><th style="padding:6px;text-align:left">稀释</th><th style="padding:6px;text-align:left">方法</th><th style="padding:6px;text-align:left">备注</th></tr></thead><tbody>`;
   for(const r of importPreviewRows){
     const color = r.status==="ok" ? "var(--green)" : "var(--red)";
-    html += `<tr style="border-top:1px solid #eee"><td style="padding:6px;color:${color}">${esc(r.msg)}</td><td style="padding:6px">${esc(r.name)}</td><td style="padding:6px">${esc(r.targets.join("、"))}</td><td style="padding:6px">${esc(r.dilution)}</td><td style="padding:6px">${esc(r.method)}</td><td style="padding:6px">${esc(r.note)}</td></tr>`;
+    html += `<tr style="border-top:1px solid #eee"><td style="padding:6px;color:${color}">${esc(r.msg)}</td><td style="padding:6px">${esc(r.name)}</td><td style="padding:6px">${esc(r.targets.join("、"))}</td><td style="padding:6px">${esc(r.dilution.join("、"))}</td><td style="padding:6px">${esc(r.method)}</td><td style="padding:6px">${esc(r.note)}</td></tr>`;
   }
   html += `</tbody></table>`;
   if(okCount > 0){
