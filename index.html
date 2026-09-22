@@ -198,6 +198,7 @@
       <div class="search">
         <input id="drugSearch" placeholder="搜索药品名称或靶标生物" oninput="renderDrugs()">
         <button class="ghost" onclick="openDrugModal()">＋ 新增药品</button>
+        <button class="ghost" onclick="exportDrugs()">💾 保存药品清单</button>
         <button class="ghost" onclick="openDrugImportModal()">⬆ 导入清单</button>
       </div>
       <div id="drugList"></div>
@@ -372,9 +373,34 @@ function saveDrug(){
 }
 function deleteDrug(id){
   const d=drugs.find(x=>x.id===id); if(!d) return;
+  // 删除药品需要管理员密码
+  if(!adminAuthed){
+    const pwd = prompt("删除药品「"+d.name+"」需要管理员密码（4 位数字）：");
+    if(pwd !== ADMIN_PWD){
+      if(pwd !== null) alert("密码错误，已取消。");
+      return;
+    }
+    adminAuthed = true;
+    sessionStorage.setItem("xk_admin", "ok");
+  }
   if(!confirm("确定删除药品「"+d.name+"」？\n已填记录中该药的信息会保留（快照），不受影响。")) return;
   apiDelDrug(id).then(()=>{ drugs=drugs.filter(x=>x.id!==id); formDrugs=formDrugs.filter(x=>x.drugId!==id);
     renderPicker(); renderDrugs(); renderFormDrugs(); toast("已删除"); }).catch(()=>toast("⚠ 删除失败"));
+}
+
+/* 导出药品清单（仅药品库 JSON 备份） */
+function exportDrugs(){
+  if(drugs.length === 0){ toast("药品库为空，无需导出"); return; }
+  const payload = {
+    type: "drug_library",
+    exportedAt: new Date().toISOString(),
+    count: drugs.length,
+    drugs: drugs
+  };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="药品清单_"+todayStr()+".json"; a.click();
+  toast("已下载药品清单（"+drugs.length+" 条）");
 }
 
 /* ============ 批量导入药品清单 ============ */
