@@ -169,20 +169,26 @@
       <div id="dayView"></div>
     </div>
 
-    <!-- 数据管理 -->
+<!-- 数据管理（默认折叠 · 管理员密码） -->
     <div class="card">
-      <h2>③ 数据管理</h2>
-      <div class="btn-row">
-        <button onclick="exportExcel()">⬇ 导出 Excel（全部）</button>
-        <button class="ghost" onclick="exportJSON()">⬇ 备份数据(JSON)</button>
-        <button class="ghost" onclick="importJSON()">⬆ 导入备份</button>
-        <button class="danger" onclick="clearAll()">清空全部数据</button>
-      </div>
-      <p class="note">数据保存在云端（固定网址，能多洁手机随处可填并自动上传）；你本机<b>开机后会自动把新记录同步进企微智能表格</b>。也可「备份数据(JSON)」留底。导出 Excel 可在电脑用 WPS / Excel 打开。</p>
+      <details id="adminPanel">
+        <summary style="cursor:pointer; padding:4px 0; font-weight:bold; color:#555; list-style:revert">
+          ⚙ ③ 数据管理（点击展开 · 需管理员密码）
+        </summary>
+        <div id="adminContent" style="display:none; margin-top:10px">
+          <div class="btn-row">
+            <button onclick="exportExcel()">⬇ 导出 Excel（全部）</button>
+            <button class="ghost" onclick="exportJSON()">⬇ 备份数据(JSON)</button>
+            <button class="ghost" onclick="importJSON()">⬆ 导入备份</button>
+            <button class="danger" onclick="clearAll()">清空全部数据</button>
+          </div>
+          <p class="note">数据保存在云端（固定网址，能多洁手机随处可填并自动上传）；你本机<b>开机后会自动把新记录同步进企微智能表格</b>。也可「备份数据(JSON)」留底。导出 Excel 可在电脑用 WPS / Excel 打开。</p>
+        </div>
+      </details>
       <input type="file" id="fileInput" accept=".json" style="display:none" onchange="doImport(event)">
     </div>
 
-  </div>
+</div>
 
   <!-- ====== 药品库 ====== -->
   <div class="sec" id="sec-drugs">
@@ -745,10 +751,34 @@ function doImport(e){
 }
 function clearAll(){
   if(!confirm("将清空全部消杀记录与签名，确定？建议先备份。"))return;
+  if(!confirm("再次确认：清空后无法恢复，需重新录入所有记录。继续？"))return;
   records=[]; confirmations={};
   if(API_OK){ fetch(API("/api/state"),{method:"DELETE"}).catch(()=>{}); } else { persistLocal(); }
   render(); toast("已清空");
 }
+
+/* ============ 管理员密码门（数据管理区） ============ */
+const ADMIN_PWD = "8888";
+let adminAuthed = sessionStorage.getItem("xk_admin") === "ok";
+const adminPanel = document.getElementById("adminPanel");
+const adminContent = document.getElementById("adminContent");
+adminPanel.addEventListener("toggle", function(){
+  if(this.open){
+    if(adminAuthed){
+      adminContent.style.display = "block";
+      return;
+    }
+    const pwd = prompt("请输入管理员密码（4 位数字）：");
+    if(pwd === ADMIN_PWD){
+      adminAuthed = true;
+      sessionStorage.setItem("xk_admin", "ok");
+      adminContent.style.display = "block";
+    } else {
+      this.open = false;
+      if(pwd !== null) alert("密码错误，已收回数据管理区。");
+    }
+  }
+});
 
 boot();
 </script>
