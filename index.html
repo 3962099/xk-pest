@@ -394,6 +394,13 @@ function parseDilution(s){
   if(/^[\/／]+$/.test(s)) return [s];
   return s.split(/[、,，\/／\s]+/).map(x=>x.trim()).filter(Boolean);
 }
+/* 只取日期部分（确认时间不显示几点几分） */
+function dateOnly(s){
+  s=(s||"").trim();
+  if(!s) return "";
+  const m=s.match(/^(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})/);
+  return m ? m[1] : s.split(/\s+/)[0];
+}
 /* 签名确认状态（支持分步签名：先服务商、后我司） */
 function confState(c){
   if(!c) return {cls:"wait", txt:"⏳ 待签名确认"};
@@ -758,7 +765,7 @@ function renderDay(d){
       <button class="ghost" onclick="printDay('${d}')">🖨 打印确认单 / 存PDF</button>
     </div>`;
   if(c.confirmed){
-    html += `<p class="note">已于 ${c.confirmTs} 完成双方签名确认。可重新签名覆盖。</p>`;
+    html += `<p class="note">已于 ${dateOnly(c.confirmTs)} 完成双方签名确认。可重新签名覆盖。</p>`;
   } else if(c.provider || c.company){
     html += `<p class="note">当前为分步签名：已签一方可先提交保存，另一方随时补签，两边都签完状态才变「✓ 双方已签名」。</p>`;
   }
@@ -892,7 +899,7 @@ function printDay(d){
     <div><b>服务商签名：</b><br>${c.provider?.img?`<img src="${c.provider.img}" height="80">`:'(未签)'}<br>姓名：${esc(c.provider?.name||'')}</div>
     <div><b>我司签名：</b><br>${c.company?.img?`<img src="${c.company.img}" height="80">`:'(未签)'}<br>姓名：${esc(c.company?.name||'')}</div>
   </div>`;
-  if(c.confirmed) h += `<p style="margin-top:14px;color:#2e7d32">确认时间：${c.confirmTs}</p>`;
+  if(c.confirmed) h += `<p style="margin-top:14px;color:#2e7d32">确认日期：${dateOnly(c.confirmTs)}</p>`;
   const area=document.getElementById("printArea"); area.innerHTML=h;
   setTimeout(()=>window.print(),100);
 }
@@ -913,7 +920,7 @@ function exportExcel(){
     const facs = recFactories(r).join("、") || "-";
     data1.push([ r.date, r.zone||"", facs, r.time, r.scope, r.method,
       drs.map(d=>d.drugName).join("、")||"-", r.note,
-      c.confirmed?"已双方签名":(c.provider?"服务商已签·待我司":"待签名"), c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
+      c.confirmed?"已双方签名":(c.provider?"服务商已签·待我司":"待签名"), c.provider?.name||"", c.company?.name||"", c.confirmed?dateOnly(c.confirmTs):"" ]);
     drs.forEach(d=>{ data2.push([ r.date, r.zone||"", facs, r.time, d.drugName, (d.targets||[]).join("、")||"-",
       ratioText(d.ratio), d.bringIn||"", d.spec||"", d.used||"", d.waste||"", d.remain||"" ]); });
   });
@@ -1027,7 +1034,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1440</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1450</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
