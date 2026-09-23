@@ -319,6 +319,15 @@ function recordDrugs(r){
   return [];
 }
 function ratioText(rt){ if(!rt) return "-"; const p=[]; if(rt.dose) p.push("剂量"+rt.dose); const _dil = Array.isArray(rt.dilution) ? rt.dilution : (rt.dilution ? [rt.dilution] : []); if(_dil.length===1 && /^[\/／]$/.test(_dil[0])) p.push("稀释：/"); else if(_dil.length) p.push("稀释"+_dil.join("、")); if(rt.unit) p.push(rt.unit); if(rt.method) p.push(rt.method); return p.join(" ")||"-"; }
+/* 稀释比例 / 施用方法 分开显示（原来两者混在一起显示为"配比"） */
+function dilutionText(rt){
+  if(!rt) return "-";
+  const _dil = Array.isArray(rt.dilution) ? rt.dilution : (rt.dilution ? [rt.dilution] : []);
+  if(!_dil.length) return "-";
+  if(_dil.length===1 && /^[\/／]$/.test(_dil[0])) return "/";
+  return _dil.join("、");
+}
+function methodText(rt){ return (rt && rt.method) ? rt.method : "-"; }
 /* 厂区 → 工厂 联动（厂区单选，工厂按厂区多选） */
 const ZONE_FACTORIES = {
   "一厂区": ["大旺","必旺","旺旺","立旺","食堂","厂区绿化带及污水井"],
@@ -476,14 +485,13 @@ function renderDrugs(){
   if(list.length===0){ box.innerHTML='<div class="empty">暂无药品。点击「＋ 新增药品」添加。</div>'; return; }
   box.innerHTML=list.map(d=>{
     const tg=(d.targets||[]).join("、")||"-";
-    const rt=ratioText(d.ratio);
     return `<div class="drug-item">
       <div class="di-top"><b>${esc(d.name)}</b>
         <div class="di-actions">
           <button class="ghost" style="padding:4px 10px;font-size:12px" onclick="openDrugModal('${d.id}')">编辑</button>
           <button class="danger" style="padding:4px 10px;font-size:12px" onclick="deleteDrug('${d.id}')">删除</button>
         </div></div>
-      <div class="di-meta">靶标：${esc(tg)}　配比：${esc(rt)}　备注：${esc(d.note||'-')}</div>
+      <div class="di-meta">靶标：${esc(tg)}　稀释比例：${esc(dilutionText(d.ratio))}　施用方法：${esc(methodText(d.ratio))}　备注：${esc(d.note||'-')}</div>
     </div>`;
   }).join("");
 }
@@ -653,10 +661,10 @@ function renderFormDrugs(){
   const box=document.getElementById("formDrugs");
   if(formDrugs.length===0){ box.innerHTML='<p class="note">尚未添加药品。请在下方选择或新建药品。</p>'; return; }
   box.innerHTML = formDrugs.map((d,i)=>{
-    const tg=(d.targets||[]).join("、")||"-"; const rt=ratioText(d.ratio);
+    const tg=(d.targets||[]).join("、")||"-";
     return `<div class="drug-row">
       <div class="dr-head"><b>${esc(d.drugName)}</b>
-        <span class="pill">靶标：${esc(tg)}</span><span class="pill">配比：${esc(rt)}</span>
+        <span class="pill">靶标：${esc(tg)}</span><span class="pill">稀释比例：${esc(dilutionText(d.ratio))}</span><span class="pill">施用方法：${esc(methodText(d.ratio))}</span>
         <button type="button" class="danger x" style="padding:3px 9px;font-size:12px" onclick="removeFormDrug(${i})">× 移除</button></div>
       <div class="grid3c">
         <div><label>带入数量</label><input placeholder="如：2 瓶" value="${esc(d.bringIn||"")}" oninput="formDrugs[${i}].bringIn=this.value"></div>
@@ -891,9 +899,9 @@ function printDay(d){
   list.forEach((r,idx)=>{
     const drs=recordDrugs(r);
     h += `<h3 style="margin:14px 0 4px">记录 ${idx+1}：${esc(r.zone||'')} ${esc(recFactories(r).join('、'))} ${r.time}（${esc(r.scope)}／${esc(r.method)}）</h3>`;
-    h += `<table><thead><tr><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>规格</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th></tr></thead><tbody>`;
-    if(drs.length===0){ h += `<tr><td colspan="8">（无药品）</td></tr>`; }
-    drs.forEach(d=>{ h += `<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join('、')||'-')}</td><td>${esc(ratioText(d.ratio))}</td><td>${esc(d.bringIn||'-')}</td><td>${esc(d.spec||'-')}</td><td>${esc(d.used||'-')}</td><td>${esc(d.waste||'-')}</td><td>${esc(d.remain||'-')}</td></tr>`; });
+    h += `<table><thead><tr><th>药品名称</th><th>靶标生物</th><th>稀释比例</th><th>施用方法</th><th>带入数量</th><th>规格</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th></tr></thead><tbody>`;
+    if(drs.length===0){ h += `<tr><td colspan="9">（无药品）</td></tr>`; }
+    drs.forEach(d=>{ h += `<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join('、')||'-')}</td><td>${esc(dilutionText(d.ratio))}</td><td>${esc(methodText(d.ratio))}</td><td>${esc(d.bringIn||'-')}</td><td>${esc(d.spec||'-')}</td><td>${esc(d.used||'-')}</td><td>${esc(d.waste||'-')}</td><td>${esc(d.remain||'-')}</td></tr>`; });
     h += `</tbody></table>`;
   });
   h += `<div style="display:flex;justify-content:space-between;margin-top:30px">
@@ -913,7 +921,7 @@ function exportExcel(){
   const head1 = ["消杀日期","厂区","工厂","消杀时间","范围","消杀方式","药品摘要","备注","确认状态","服务商签名人","我司确认人","确认日期"];
   const data1 = [head1];
   // 表2：药品明细（每款药一行）
-  const head2 = ["消杀日期","厂区","工厂","消杀时间","药品名称","靶标生物","配比方式","带入数量","规格","使用量(L)","带出废弃物料/包装","剩余数量(L)"];
+  const head2 = ["消杀日期","厂区","工厂","消杀时间","药品名称","靶标生物","稀释比例","施用方法","带入数量","规格","使用量(L)","带出废弃物料/包装","剩余数量(L)"];
   const data2 = [head2];
   sorted.forEach(r=>{
     const c = confirmations[r.date] || {};
@@ -923,7 +931,7 @@ function exportExcel(){
       drs.map(d=>d.drugName).join("、")||"-", r.note,
       c.confirmed?"已双方签名":(c.provider?"服务商已签·待我司":"待签名"), c.provider?.name||"", c.company?.name||"", c.confirmed?dateOnly(c.confirmTs):"" ]);
     drs.forEach(d=>{ data2.push([ r.date, r.zone||"", facs, r.time, d.drugName, (d.targets||[]).join("、")||"-",
-      ratioText(d.ratio), d.bringIn||"", d.spec||"", d.used||"", d.waste||"", d.remain||"" ]); });
+      dilutionText(d.ratio), methodText(d.ratio), d.bringIn||"", d.spec||"", d.used||"", d.waste||"", d.remain||"" ]); });
   });
   try{
     const wb = XLSX.utils.book_new();
@@ -931,7 +939,7 @@ function exportExcel(){
     ws1["!cols"] = [{wch:12},{wch:10},{wch:18},{wch:10},{wch:16},{wch:12},{wch:20},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
     XLSX.utils.book_append_sheet(wb, ws1, "消杀确认记录");
     const ws2 = XLSX.utils.aoa_to_sheet(data2);
-    ws2["!cols"] = [{wch:12},{wch:10},{wch:18},{wch:10},{wch:14},{wch:14},{wch:18},{wch:12},{wch:14},{wch:10},{wch:18},{wch:12}];
+    ws2["!cols"] = [{wch:12},{wch:10},{wch:18},{wch:10},{wch:14},{wch:14},{wch:16},{wch:14},{wch:12},{wch:14},{wch:10},{wch:18},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws2, "药品明细");
     XLSX.writeFile(wb, "消杀确认记录_"+todayStr()+".xlsx");
     toast("Excel 已导出（含药品明细表）");
@@ -1035,7 +1043,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1545</span> · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1715</span> · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
