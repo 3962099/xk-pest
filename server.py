@@ -141,10 +141,32 @@ def set_confirm():
     if not d:
         return jsonify({"ok": False, "msg": "缺少 date"}), 400
     c = conn(); k = cur(c)
+    # 读取旧数据做「合并」：支持服务商与我司分设备、分先后各自签名，互不覆盖
+    k.execute(adapt("SELECT data FROM confirmations WHERE date=?"), (d,))
+    row = k.fetchone()
+    cur_data = {}
+    if row:
+        try:
+            cur_data = json.loads(row[0]) or {}
+        except Exception:
+            cur_data = {}
+    for kk, vv in (cc or {}).items():
+        if kk in ("provider", "company") and isinstance(vv, dict) and isinstance(cur_data.get(kk), dict):
+            m = dict(cur_data[kk]); m.update(vv); cur_data[kk] = m
+        else:
+            cur_data[kk] = vv
+    cur_data["date"] = d
+    # 双方签名都齐了才算确认完成
+    cur_data["confirmed"] = bool(cur_data.get("provider") and cur_data.get("company"))
+    if cur_data["confirmed"] and not cur_data.get("confirmTs"):
+        cur_data["confirmTs"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    payload = json.dumps(cur_data, ensure_ascii=False)
     k.execute(adapt("INSERT INTO confirmations(date,data) VALUES(?,?) ON CONFLICT(date) DO UPDATE SET data=?"),
-              (d, json.dumps(cc, ensure_ascii=False), json.dumps(cc, ensure_ascii=False)))
+              (d, payload, payload))
     c.commit(); c.close()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "confirmed": cur_data["confirmed"],
+                    "hasProvider": bool(cur_data.get("provider")),
+                    "hasCompany": bool(cur_data.get("company"))})
 
 @app.route("/api/provider", methods=["GET", "POST"])
 def provider():
