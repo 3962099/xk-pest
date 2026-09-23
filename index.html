@@ -277,7 +277,7 @@ function persistLocal(){
 }
 async function apiAdd(r){ await fetch(API("/api/record"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(r)}); }
 async function apiDel(id){ await fetch(API("/api/record/")+encodeURIComponent(id),{method:"DELETE"}); }
-async function apiConfirm(c){ await fetch(API("/api/confirm"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(c)}); }
+async function apiConfirm(c){ const r=await fetch(API("/api/confirm"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(c)}); if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.msg||("HTTP "+r.status)); } }
 async function apiProvider(n){ await fetch(API("/api/provider"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})}); }
 async function apiAddDrug(d){ const r=await fetch(API("/api/drugs"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)}); const j=await r.json(); if(j.ok) drugs.push(j.drug); return j; }
 async function apiUpdDrug(id,d){ const r=await fetch(API("/api/drugs/")+encodeURIComponent(id),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)}); const j=await r.json(); if(j.ok){ const i=drugs.findIndex(x=>x.id===id); if(i>=0) drugs[i]=j.drug; } return j; }
@@ -693,7 +693,7 @@ function padEmpty(canvas){ const x=canvas.getContext("2d");
   for(let i=0;i<d.length;i+=4){ if(d[i]<250||d[i+1]<250||d[i+2]<250) return false; }
   return true; }
 
-function completeDay(d){
+async function completeDay(d){
   const pName=document.getElementById("pName").value.trim();
   const cName=document.getElementById("cName").value.trim();
   const padP=document.getElementById("padP"), padC=document.getElementById("padC");
@@ -702,11 +702,14 @@ function completeDay(d){
   if(padEmpty(padP)){ toast("请让服务商在左侧签名"); return; }
   if(padEmpty(padC)){ toast("请让我司在右侧签名"); return; }
   confirmations[d] = {
-    confirmed:true, confirmTs: new Date().toLocaleString("zh-CN"),
+    date:d, confirmed:true, confirmTs: new Date().toLocaleString("zh-CN"),
     provider:{ name:pName, img:padP.toDataURL("image/png") },
     company:{ name:cName, img:padC.toDataURL("image/png") }
   };
-  if(API_OK){ apiConfirm(confirmations[d]).catch(()=>toast("⚠ 同步签名失败")); } else { persistLocal(); }
+  if(API_OK){
+    try{ await apiConfirm(confirmations[d]); }
+    catch(err){ toast("⚠ 签名上传失败："+err.message+"，请检查网络后重试"); return; }
+  } else { persistLocal(); }
   render(); toast("✓ 当日确认完成，已双方签名");
 }
 
