@@ -793,8 +793,10 @@ function fitPad(canvas){
   if(saved){ const img=new Image(); img.onload=()=>x.drawImage(img,0,0,w,h); img.src=saved; }
 }
 function initPad(canvas){
+  if(!canvas) return;
   fitPad(canvas);
   const ctx=canvas.getContext("2d");
+  if(!ctx) return;
   let drawing=false,lastX,lastY;
   const pos = e=>{ const r=canvas.getBoundingClientRect();
     const t=e.touches?e.touches[0]:e;
@@ -1034,7 +1036,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1450</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1455</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
