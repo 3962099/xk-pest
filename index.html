@@ -199,7 +199,7 @@
   <div class="sec" id="sec-drugs">
     <div class="card">
       <h2>药品库 <span class="tag">可增删改</span></h2>
-      <p class="note">这里维护一份药品清单：每款药记录「名称 / 适用靶标生物 / 稀释比例 / 施用方法 / 备注」。<b>稀释比例</b>任意填写（数字、中文、英文、百分比都行；多种用 <code>、</code> / <code>,</code> / <code>/</code> 分隔）。填单时从清单里选择，自动带出靶标与配比。</p>
+      <p class="note">这里维护一份药品清单：每款药记录「名称 / 适用靶标生物 / 稀释比例 / 施用方法 / 备注」。<b>稀释比例</b>任意填写（数字、中文、英文、百分比都行；多种用 <code>、</code> / <code>,</code> / <code>/</code> 分隔；<b>单填一个 <code>/</code> 表示不稀释</b>）。填单时从清单里选择，自动带出靶标与配比。</p>
       <div class="search">
         <input id="drugSearch" placeholder="搜索药品名称或靶标生物" oninput="renderDrugs()">
         <button class="ghost" onclick="openDrugModal()">＋ 新增药品</button>
@@ -219,7 +219,7 @@
     <label>药品名称 *</label><input id="dName" placeholder="如：残杀威">
     <label>适用靶标生物（多个用顿号 / 逗号分隔）</label><input id="dTargets" placeholder="如：蟑螂、蚊、鼠">
     <div class="grid2">
-      <div><label>稀释比例</label><input id="dDilution" placeholder="任意文字，如：1:100、1:200 / 原液 / RTU / 50%"></div>
+      <div><label>稀释比例</label><input id="dDilution" placeholder="任意文字，如：1:100、1:200 / 原液 / RTU / 50%；单填 / 表示不稀释"></div>
       <div><label>施用方法</label><input id="dMethod" placeholder="如：滞留喷洒"></div>
     </div>
     <label>备注</label><input id="dNote" placeholder="选填">
@@ -292,7 +292,14 @@ function recordDrugs(r){
     bringIn:r.bringIn, spec:r.spec, used:r.used, waste:r.waste, remain:r.remain}];
   return [];
 }
-function ratioText(rt){ if(!rt) return "-"; const p=[]; if(rt.dose) p.push("剂量"+rt.dose); const _dil = Array.isArray(rt.dilution) ? rt.dilution : (rt.dilution ? [rt.dilution] : []); if(_dil.length) p.push("稀释"+_dil.join("、")); if(rt.unit) p.push(rt.unit); if(rt.method) p.push(rt.method); return p.join(" ")||"-"; }
+function ratioText(rt){ if(!rt) return "-"; const p=[]; if(rt.dose) p.push("剂量"+rt.dose); const _dil = Array.isArray(rt.dilution) ? rt.dilution : (rt.dilution ? [rt.dilution] : []); if(_dil.length===1 && /^[\/／]$/.test(_dil[0])) p.push("稀释：/"); else if(_dil.length) p.push("稀释"+_dil.join("、")); if(rt.unit) p.push(rt.unit); if(rt.method) p.push(rt.method); return p.join(" ")||"-"; }
+/* 稀释比例解析：单独一个「/」表示无需稀释，要原样保留；其它情况按 、 , ， / 空格 拆成多种 */
+function parseDilution(s){
+  s=(s||"").trim();
+  if(!s) return [];
+  if(/^[\/／]+$/.test(s)) return [s];
+  return s.split(/[、,，\/／\s]+/).map(x=>x.trim()).filter(Boolean);
+}
 function isValidNum(v){ return /^\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?%$/.test(v); }
 
 /* 启动时自动判断：连上后台就用共享数据，否则用本机存储 */
@@ -364,7 +371,7 @@ function closeDrugModal(){ document.getElementById("drugModal").style.display="n
 function saveDrug(){
   const name=document.getElementById("dName").value.trim();
   const targets=document.getElementById("dTargets").value.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
-  const dilutionList=document.getElementById("dDilution").value.split(/[、,，\/\s]+/).map(s=>s.trim()).filter(Boolean);
+  const dilutionList=parseDilution(document.getElementById("dDilution").value);
   const method=document.getElementById("dMethod").value.trim();
   const note=document.getElementById("dNote").value.trim();
   let err=null;
@@ -453,7 +460,7 @@ function parseDrugImport(){
     const name = (parts[0]||"").trim();
     const targetsRaw = (parts[1]||"").trim();
     const targets = targetsRaw.split(/[、,，\s]+/).map(s=>s.trim()).filter(Boolean);
-    const dilutionList = (parts[2]||"").split(/[、,，\/\s]+/).map(s=>s.trim()).filter(Boolean);
+    const dilutionList = parseDilution(parts[2]);
     const method = (parts[3]||"").trim();
     const note = (parts[4]||"").trim();
 
@@ -872,7 +879,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1340</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1345</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
