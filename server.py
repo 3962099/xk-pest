@@ -83,6 +83,11 @@ def xlsx_js():
 def config_js():
     return send_from_directory(BASE, "config.js")
 
+@app.route("/admin")
+@app.route("/admin.html")
+def admin_page():
+    return send_from_directory(BASE, "admin.html")
+
 @app.route("/api/health")
 def health():
     return jsonify({"ok": True, "db": "postgres" if USE_PG else "sqlite"})
