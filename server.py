@@ -29,6 +29,16 @@ def _cors(resp):
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return resp
 
+@app.after_request
+def _no_store_html(resp):
+    # HTML 页面禁止缓存：避免手机浏览器长期使用旧版页面（旧版会导致签名上传失败却不报错）
+    ct = resp.headers.get("Content-Type", "")
+    if "text/html" in ct:
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
+
 def conn():
     if USE_PG:
         return psycopg2.connect(DATABASE_URL)
