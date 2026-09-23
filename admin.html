@@ -43,6 +43,21 @@
   #lock input{width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:16px;letter-spacing:4px;text-align:center}
   #lock button{width:100%;margin-top:14px;background:var(--green);color:#fff;border:none;font-size:15px;padding:11px}
   .err{color:var(--red);font-size:13px;min-height:18px;margin-top:8px}
+  tr.rec{cursor:pointer}
+  tr.rec:hover{background:#f0f7f0}
+  .tip{color:var(--muted);font-size:12px;margin:0 0 8px}
+  #detail{position:fixed;inset:0;background:rgba(20,40,20,.5);display:none;align-items:flex-start;justify-content:center;z-index:60;overflow:auto;padding:20px}
+  #detail .box{background:#fff;border-radius:14px;max-width:780px;width:100%;padding:18px;margin:auto}
+  #detail .close{float:right;background:#fff}
+  #detail h2{margin:0 0 2px;font-size:18px;color:var(--green-d)}
+  #detail .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
+  #detail h3{margin:12px 0 4px;font-size:15px;color:var(--green-d)}
+  #detail .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin-bottom:6px}
+  #detail .kv b{color:var(--muted);font-weight:500;white-space:nowrap}
+  #detail table{font-size:13px}
+  #detail .sigs{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+  #detail .sig{flex:1;min-width:240px}
+  #detail .sig img{max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
 </style>
 </head>
 <body>
@@ -72,9 +87,15 @@
     <select id="dateSel" onchange="render()"><option value="">全部日期</option></select>
     <input type="search" id="kw" placeholder="搜索：区域 / 范围 / 方式 / 药品 / 备注" oninput="render()">
   </div>
+  <p class="tip">💡 点击表格中任意一行，可查看该条记录的完整详情（药品明细 + 双方签名）</p>
   <div class="stat" id="stat"></div>
   <div class="card"><div id="tbl"></div></div>
 </main>
+
+<div id="detail"><div class="box">
+  <button class="close" onclick="closeDetail()">✕ 关闭</button>
+  <div id="detailBody"></div>
+</div></div>
 
 <script>
 /* ===== 数据 ===== */
@@ -156,7 +177,7 @@ function render(){
     const status = c.confirmed
       ? `<span class="ok">✓ 已双方签名</span><br><span style="font-size:11px;color:var(--muted)">${esc(c.provider?.name||'')} / ${esc(c.company?.name||'')}</span>`
       : `<span class="wait">⏳ 待签名</span>`;
-    h+=`<tr>
+    h+=`<tr class="rec" onclick="viewDetail('${esc(r.id)}')">
       <td>${esc(r.date)}</td><td>${esc(r.time)}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td>
       <td>${esc(r.method)}</td><td>${esc(drs.map(d=>d.drugName).join("、")||"-")}</td>
       <td>${esc(r.note)||"-"}</td><td>${status}</td></tr>`;
@@ -209,6 +230,40 @@ async function clearAll(){
     records=[]; confirmations={}; render(); toast("已清空");
   }catch(e){ toast("清空失败："+e.message); }
 }
+
+/* ===== 点击查看记录详情 ===== */
+function viewDetail(id){
+  const r=records.find(x=>x.id===id); if(!r) return;
+  const c=confirmations[r.date]||{};
+  const drs=recordDrugs(r);
+  let h=`<h2>消杀记录详情 · ${esc(r.date)} ${esc(r.time||'')}</h2>
+    <div class="sub">记录ID：${esc(r.id)}</div>
+    <div class="kv">
+      <b>工厂/区域</b><span>${esc(r.factory)||"-"}</span>
+      <b>范围</b><span>${esc(r.scope)||"-"}</span>
+      <b>消杀方式</b><span>${esc(r.method)||"-"}</span>
+      <b>备注</b><span>${esc(r.note)||"-"}</span>
+      <b>服务商</b><span>${esc(providerName)}</span>
+      <b>确认状态</b><span>${c.confirmed?'<span class="ok">✓ 已双方签名</span>':'<span class="wait">⏳ 待签名</span>'}</span>
+      ${c.confirmed?`<b>确认时间</b><span>${esc(c.confirmTs||"")}</span>`:""}
+    </div>`;
+  h+=`<h3>药品明细（${drs.length}）</h3>`;
+  if(drs.length){
+    h+='<table><thead><tr><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入</th><th>使用量(L)</th><th>带出废弃</th><th>剩余(L)</th></tr></thead><tbody>';
+    drs.forEach(d=>{ h+=`<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join("、")||"-")}</td><td>${esc(ratioText(d.ratio))}</td><td>${esc(d.bringIn||"-")}</td><td>${esc(d.used||"-")}</td><td>${esc(d.waste||"-")}</td><td>${esc(d.remain||"-")}</td></tr>`; });
+    h+="</tbody></table>";
+  } else h+='<div class="empty">无药品记录</div>';
+  h+=`<h3>双方签名</h3><div class="sigs">`;
+  if(c.confirmed){
+    h+=`<div class="sig"><div style="font-size:13px;color:var(--muted)">服务商签名人：${esc(c.provider?.name||"-")}</div><img src="${c.provider?.img||""}" alt="服务商签名"></div>`;
+    h+=`<div class="sig"><div style="font-size:13px;color:var(--muted)">我司确认人：${esc(c.company?.name||"-")}</div><img src="${c.company?.img||""}" alt="我司签名"></div>`;
+  } else h+='<div class="empty">尚未完成双方签名确认</div>';
+  h+="</div>";
+  document.getElementById("detailBody").innerHTML=h;
+  document.getElementById("detail").style.display="flex";
+}
+function closeDetail(){ document.getElementById("detail").style.display="none"; }
+document.getElementById("detail").addEventListener("click",e=>{ if(e.target.id==="detail") closeDetail(); });
 
 /* ===== 轻提示 ===== */
 let toastTimer;
