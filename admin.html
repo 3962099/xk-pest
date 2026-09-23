@@ -93,7 +93,7 @@
   <p class="tip">💡 点击表格中任意一行，可查看该条记录的完整详情（药品明细 + 双方签名）</p>
   <div class="stat" id="stat"></div>
   <div class="card"><div id="tbl"></div></div>
-  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1525 · 构建 <span id="buildId">__BUILD__</span></div>
+  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1545 · 构建 <span id="buildId">__BUILD__</span></div>
 </main>
 
 <div id="detail"><div class="box">
@@ -372,9 +372,12 @@ function viewDetail(id){
     drs.forEach(d=>{ h+=`<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join("、")||"-")}</td><td>${esc(ratioText(d.ratio))}</td><td>${esc(d.bringIn||"-")}</td><td>${esc(d.spec||"-")}</td><td>${esc(d.used||"-")}</td><td>${esc(d.waste||"-")}</td><td>${esc(d.remain||"-")}</td></tr>`; });
     h+="</tbody></table>";
   } else h+='<div class="empty">无药品记录</div>';
-  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:8px">
         <h3 style="margin:0">双方签名</h3>
-        <button class="ghost" onclick="printRecords(['${esc(r.id)}'])">🖨 导出本条 PDF</button>
+        <div>
+          <button class="ghost" onclick="printRecords(['${esc(r.id)}'])">🖨 导出本条 PDF</button>
+          <button class="danger" onclick="deleteRecord('${esc(r.id)}')">🗑 删除本条记录</button>
+        </div>
       </div>`;
   h+=`<div class="sigs">`;
   h+=`<div class="sig"><div style="font-size:13px;color:var(--muted)">服务商签名人：${esc(c.provider?.name||"-")}${c.provider?`　<span style="color:var(--green)">✓ 已签 ${esc(dateOnly(c.providerTs))}</span>`:""}</div>${c.provider?.img?`<img src="${c.provider.img}" alt="服务商签名">`:'<div class="empty">服务商尚未签名</div>'}</div>`;
@@ -459,6 +462,18 @@ async function adminSignCompany(date){
 }
 function closeDetail(){ document.getElementById("detail").style.display="none"; }
 document.getElementById("detail").addEventListener("click",e=>{ if(e.target.id==="detail") closeDetail(); });
+/* 删除单条记录（后台专用；填单页已不再展示记录列表） */
+async function deleteRecord(id){
+  const r=records.find(x=>x.id===id); if(!r) return;
+  if(!confirm(`确定删除这条记录吗？\n${r.date} ${r.time||''} ${r.zone||''} ${factoriesText(r)}\n删除后无法恢复。`)) return;
+  try{
+    const resp=await fetch("/api/record/"+encodeURIComponent(id),{method:"DELETE"});
+    if(!resp.ok) throw new Error("HTTP "+resp.status);
+    closeDetail();
+    await load(false);
+    toast("已删除该条记录");
+  }catch(e){ toast("⚠ 删除失败："+e.message); }
+}
 
 /* ===== 轻提示 ===== */
 let toastTimer;
