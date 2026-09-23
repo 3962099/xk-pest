@@ -90,7 +90,7 @@
   <p class="tip">💡 点击表格中任意一行，可查看该条记录的完整详情（药品明细 + 双方签名）</p>
   <div class="stat" id="stat"></div>
   <div class="card"><div id="tbl"></div></div>
-  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1355</div>
+  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1410</div>
 </main>
 
 <div id="detail"><div class="box">
@@ -179,7 +179,11 @@ function render(){
     const c=confirmations[r.date]||{};
     const status = c.confirmed
       ? `<span class="ok">✓ 已双方签名</span><br><span style="font-size:11px;color:var(--muted)">${esc(c.provider?.name||'')} / ${esc(c.company?.name||'')}</span>`
-      : `<span class="wait">⏳ 待签名</span>`;
+      : (c.provider
+          ? `<span class="wait">🟡 服务商已签</span><br><span style="font-size:11px;color:var(--muted)">待我司补签 · 点此处理</span>`
+          : (c.company
+              ? `<span class="wait">🟡 我司已签</span><br><span style="font-size:11px;color:var(--muted)">待服务商签名</span>`
+              : `<span class="wait">⏳ 待签名</span>`));
     h+=`<tr class="rec" onclick="viewDetail('${esc(r.id)}')">
       <td>${esc(r.date)}</td><td>${esc(r.time)}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td>
       <td>${esc(r.method)}</td><td>${esc(drs.map(d=>d.drugName).join("、")||"-")}</td>
@@ -201,7 +205,8 @@ function exportExcel(){
     const c=confirmations[r.date]||{};
     const drs=recordDrugs(r);
     data1.push([ r.date,r.factory,r.time,r.scope,r.method, drs.map(d=>d.drugName).join("、")||"-", r.note,
-      c.confirmed?"已双方签名":"待签名", c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
+      c.confirmed?"已双方签名":(c.provider?"服务商已签·待我司":(c.company?"我司已签·待服务商":"待签名")),
+      c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
     drs.forEach(d=>{ data2.push([ r.date,r.factory,r.time, d.drugName, (d.targets||[]).join("、")||"-",
       ratioText(d.ratio), d.bringIn||"", d.spec||"", d.used||"", d.waste||"", d.remain||"" ]); });
   });
@@ -247,7 +252,7 @@ function viewDetail(id){
       <b>消杀方式</b><span>${esc(r.method)||"-"}</span>
       <b>备注</b><span>${esc(r.note)||"-"}</span>
       <b>服务商</b><span>${esc(providerName)}</span>
-      <b>确认状态</b><span>${c.confirmed?'<span class="ok">✓ 已双方签名</span>':'<span class="wait">⏳ 待签名</span>'}</span>
+      <b>确认状态</b><span>${c.confirmed?'<span class="ok">✓ 已双方签名</span>':(c.provider?'<span class="wait">🟡 服务商已签名，待我司补签</span>':'<span class="wait">⏳ 待签名</span>')}</span>
       ${c.confirmed?`<b>确认时间</b><span>${esc(c.confirmTs||"")}</span>`:""}
     </div>`;
   h+=`<h3>药品明细（${drs.length}）</h3>`;
@@ -256,14 +261,71 @@ function viewDetail(id){
     drs.forEach(d=>{ h+=`<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join("、")||"-")}</td><td>${esc(ratioText(d.ratio))}</td><td>${esc(d.bringIn||"-")}</td><td>${esc(d.spec||"-")}</td><td>${esc(d.used||"-")}</td><td>${esc(d.waste||"-")}</td><td>${esc(d.remain||"-")}</td></tr>`; });
     h+="</tbody></table>";
   } else h+='<div class="empty">无药品记录</div>';
-  h+=`<h3>双方签名</h3><div class="sigs">`;
-  if(c.confirmed){
-    h+=`<div class="sig"><div style="font-size:13px;color:var(--muted)">服务商签名人：${esc(c.provider?.name||"-")}</div><img src="${c.provider?.img||""}" alt="服务商签名"></div>`;
-    h+=`<div class="sig"><div style="font-size:13px;color:var(--muted)">我司确认人：${esc(c.company?.name||"-")}</div><img src="${c.company?.img||""}" alt="我司签名"></div>`;
-  } else h+='<div class="empty">尚未完成双方签名确认</div>';
-  h+="</div>";
+  h+=`<h3>双方签名</h3>`;
+  h+=`<div class="sigs">`;
+  h+=`<div class="sig"><div style="font-size:13px;color:var(--muted)">服务商签名人：${esc(c.provider?.name||"-")}${c.provider?`　<span style="color:var(--green)">✓ 已签 ${esc(c.providerTs||"")}</span>`:""}</div>${c.provider?.img?`<img src="${c.provider.img}" alt="服务商签名">`:'<div class="empty">服务商尚未签名</div>'}</div>`;
+  h+=`<div class="sig"><div style="font-size:13px;color:var(--muted)">我司确认人：${esc(c.company?.name||"-")}${c.company?`　<span style="color:var(--green)">✓ 已签 ${esc(c.companyTs||"")}</span>`:""}</div>${c.company?.img?`<img src="${c.company.img}" alt="我司签名">`:'<div class="empty">我司尚未签名</div>'}</div>`;
+  h+=`</div>`;
+  // 我司后台补签
+  h+=`<h3>我司补签${c.company?"（重新签可覆盖）":""}</h3>`;
+  if(!c.provider){
+    h+=`<p class="tip">⚠ 该日期还没有服务商签名。你可以先补签，但状态要等<b>服务商也签名后</b>才会变成「✓ 已双方签名」。</p>`;
+  }
+  h+=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="admSignName" placeholder="我司确认人姓名" value="${esc(c.company?.name||"")}"
+          style="padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;flex:1;min-width:160px">
+        <button class="ghost" onclick="clearAdmPad()">清除签名</button>
+        <button class="pri" onclick="adminSignCompany('${esc(r.date)}')">✓ 我司签名确认</button>
+      </div>
+      <div style="margin-top:8px"><canvas id="admPad" width="600" height="180" style="width:100%;max-width:600px;border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none"></canvas></div>`;
   document.getElementById("detailBody").innerHTML=h;
   document.getElementById("detail").style.display="flex";
+  initAdmPad();
+}
+
+/* ===== 后台签名画板（我司补签用） ===== */
+function initAdmPad(){
+  const cv=document.getElementById("admPad"); if(!cv) return;
+  const ctx=cv.getContext("2d");
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  let drawing=false,lx=0,ly=0;
+  const pos=e=>{ const r=cv.getBoundingClientRect(); const t=e.touches?e.touches[0]:e;
+    return {x:(t.clientX-r.left)*(cv.width/r.width), y:(t.clientY-r.top)*(cv.height/r.height)}; };
+  const start=e=>{ drawing=true; const p=pos(e); lx=p.x; ly=p.y; e.preventDefault(); };
+  const move=e=>{ if(!drawing) return; const p=pos(e);
+    ctx.lineWidth=2.4; ctx.lineCap="round"; ctx.strokeStyle="#111";
+    ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(p.x,p.y); ctx.stroke(); lx=p.x; ly=p.y; e.preventDefault(); };
+  const end=()=>{ drawing=false; };
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move);
+  window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false});
+  cv.addEventListener("touchend",end);
+}
+function clearAdmPad(){
+  const cv=document.getElementById("admPad"); if(!cv) return;
+  const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+}
+function admPadEmpty(cv){
+  const ctx=cv.getContext("2d");
+  const d=ctx.getImageData(0,0,cv.width,cv.height).data;
+  for(let i=0;i<d.length;i+=4){ if(d[i]<230||d[i+1]<230||d[i+2]<230) return false; }
+  return true;
+}
+async function adminSignCompany(date){
+  const name=(document.getElementById("admSignName").value||"").trim();
+  const cv=document.getElementById("admPad");
+  if(!name){ toast("请填写我司确认人姓名"); return; }
+  if(!cv || admPadEmpty(cv)){ toast("请先签名"); return; }
+  const part={ date:date, company:{ name:name, img:cv.toDataURL("image/png") }, companyTs:new Date().toLocaleString("zh-CN") };
+  try{
+    const r=await fetch("/api/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(part)});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.msg||("HTTP "+r.status)); }
+    const j=await r.json();
+    await load(false);
+    toast(j.confirmed?"✓ 我司已签名，双方签名完成":"✓ 我司已签名，待服务商签名");
+    const rec=records.find(x=>x.date===date);
+    if(rec) viewDetail(rec.id); else closeDetail();
+  }catch(e){ toast("⚠ 签名上传失败："+e.message); }
 }
 function closeDetail(){ document.getElementById("detail").style.display="none"; }
 document.getElementById("detail").addEventListener("click",e=>{ if(e.target.id==="detail") closeDetail(); });
