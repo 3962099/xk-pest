@@ -39,6 +39,9 @@
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--green)}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .grid4{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .grid3c{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .grid2c{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  @media (max-width:760px){ .grid3c{grid-template-columns:1fr 1fr} }
   button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:11px 16px;
     background:var(--green);color:#fff;font-weight:600}
   button:hover{background:var(--green-d)}
@@ -526,12 +529,14 @@ function renderFormDrugs(){
       <div class="dr-head"><b>${esc(d.drugName)}</b>
         <span class="pill">靶标：${esc(tg)}</span><span class="pill">配比：${esc(rt)}</span>
         <button type="button" class="danger x" style="padding:3px 9px;font-size:12px" onclick="removeFormDrug(${i})">× 移除</button></div>
-      <div class="grid4">
+      <div class="grid3c">
         <div><label>带入数量</label><input placeholder="如：2 瓶" value="${esc(d.bringIn||"")}" oninput="formDrugs[${i}].bringIn=this.value"></div>
         <div><label>规格</label><input placeholder="如：500g/瓶" value="${esc(d.spec||"")}" oninput="formDrugs[${i}].spec=this.value"></div>
         <div><label>使用量(L)</label><input placeholder="如：1L" value="${esc(d.used||"")}" oninput="formDrugs[${i}].used=this.value"></div>
-        <div><label>剩余数量(L)</label><input placeholder="如：1L" value="${esc(d.remain||"")}" oninput="formDrugs[${i}].remain=this.value"></div>
+      </div>
+      <div class="grid2c">
         <div><label>带出废弃物料/包装</label><input placeholder="如：空瓶1" value="${esc(d.waste||"")}" oninput="formDrugs[${i}].waste=this.value"></div>
+        <div><label>剩余数量(L)</label><input placeholder="如：1L" value="${esc(d.remain||"")}" oninput="formDrugs[${i}].remain=this.value"></div>
       </div>
     </div>`;
   }).join("");
@@ -879,7 +884,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1345</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1355</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
