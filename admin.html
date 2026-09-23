@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>虫控消杀 · 管理后台</title>
+<script src="/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
+    --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.5;font-size:15px}
+  header{background:var(--green-d);color:#fff;padding:14px 16px;display:flex;flex-wrap:wrap;
+    align-items:center;gap:10px;justify-content:space-between}
+  header h1{margin:0;font-size:17px}
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  button{cursor:pointer;font-size:14px;padding:9px 12px;border-radius:8px;border:1px solid var(--line);
+    background:#fff;color:var(--txt)}
+  button.pri{background:var(--green);color:#fff;border-color:var(--green)}
+  button.ghost{background:#fff}
+  button.danger{color:var(--red);border-color:#f0c0c0}
+  main{max-width:1100px;margin:0 auto;padding:14px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .toolbar input,.toolbar select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+  .toolbar input[type=search]{flex:1;min-width:160px}
+  .stat{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;color:var(--muted);font-size:13px}
+  .stat b{color:var(--txt)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;overflow:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top;white-space:nowrap}
+  th{background:#eef3ee;position:sticky;top:0}
+  .ok{color:var(--green);font-weight:600}
+  .wait{color:var(--amber);font-weight:600}
+  .empty{text-align:center;color:var(--muted);padding:30px}
+  /* 密码门 */
+  #lock{position:fixed;inset:0;background:rgba(20,40,20,.55);display:flex;align-items:center;justify-content:center;z-index:50}
+  #lock .box{background:#fff;border-radius:14px;padding:24px 22px;width:300px;max-width:86vw;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+  #lock h2{margin:0 0 6px;font-size:17px;color:var(--green-d)}
+  #lock p{margin:0 0 14px;color:var(--muted);font-size:13px}
+  #lock input{width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font-size:16px;letter-spacing:4px;text-align:center}
+  #lock button{width:100%;margin-top:14px;background:var(--green);color:#fff;border:none;font-size:15px;padding:11px}
+  .err{color:var(--red);font-size:13px;min-height:18px;margin-top:8px}
+</style>
+</head>
+<body>
+
+<div id="lock">
+  <div class="box">
+    <h2>管理后台</h2>
+    <p>请输入管理员密码进入</p>
+    <input id="pwd" type="password" inputmode="numeric" maxlength="12" placeholder="4 位数字">
+    <div class="err" id="lockErr"></div>
+    <button onclick="unlock()">进入后台</button>
+  </div>
+</div>
+
+<header>
+  <h1>🐞 虫控消杀 · 管理后台</h1>
+  <div class="btns">
+    <button class="ghost" id="refreshBtn" onclick="load(true)">🔄 刷新云端数据</button>
+    <button class="pri" onclick="exportExcel()">⬇ 导出 Excel</button>
+    <button class="ghost" onclick="exportJSON()">⬇ 备份 JSON</button>
+    <button class="danger" onclick="clearAll()">清空全部</button>
+  </div>
+</header>
+
+<main>
+  <div class="toolbar">
+    <select id="dateSel" onchange="render()"><option value="">全部日期</option></select>
+    <input type="search" id="kw" placeholder="搜索：区域 / 范围 / 方式 / 药品 / 备注" oninput="render()">
+  </div>
+  <div class="stat" id="stat"></div>
+  <div class="card"><div id="tbl"></div></div>
+</main>
+
+<script>
+/* ===== 数据 ===== */
+let records=[], confirmations={}, drugs=[], providerName="能多洁";
+
+/* ===== 工具 ===== */
+function esc(s){ return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
+function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+function recordDrugs(r){
+  if(Array.isArray(r.drugs) && r.drugs.length) return r.drugs;
+  if(r.drugName) return [{drugName:r.drugName, targets:r.target?[r.target]:[], ratio:{dilution:r.ratio},
+    bringIn:r.bringIn, used:r.used, waste:r.waste, remain:r.remain}];
+  return [];
+}
+function ratioText(rt){ if(!rt) return "-"; const p=[];
+  const _dil = Array.isArray(rt.dilution) ? rt.dilution : (rt.dilution ? [rt.dilution] : []);
+  if(_dil.length) p.push("稀释"+_dil.join("、")); if(rt.method) p.push(rt.method);
+  return p.join(" ")||"-"; }
+
+/* ===== 密码门 ===== */
+const ADMIN_PWD="8888";
+function unlock(){
+  const v=document.getElementById("pwd").value.trim();
+  if(v===ADMIN_PWD){
+    sessionStorage.setItem("xk_admin","ok");
+    document.getElementById("lock").style.display="none";
+    load(true);
+  } else {
+    document.getElementById("lockErr").textContent="密码错误，请重试";
+  }
+}
+document.getElementById("pwd").addEventListener("keydown",e=>{ if(e.key==="Enter") unlock(); });
+if(sessionStorage.getItem("xk_admin")==="ok"){
+  document.getElementById("lock").style.display="none";
+  load(true);
+}
+
+/* ===== 拉取云端数据 ===== */
+async function load(showToast){
+  const btn=document.getElementById("refreshBtn");
+  if(btn){ btn.disabled=true; btn.textContent="🔄 刷新中…"; }
+  try{
+    const r=await fetch("/api/state");
+    const s=await r.json();
+    providerName=s.provider||"能多洁";
+    records=s.records||[]; confirmations=s.confirmations||{}; drugs=s.drugs||[];
+    render();
+    if(showToast) toast("已刷新云端数据");
+  }catch(e){ toast("刷新失败："+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent="🔄 刷新云端数据"; } }
+}
+
+/* ===== 渲染表格 ===== */
+function render(){
+  const ds=document.getElementById("dateSel");
+  const dates=[...new Set(records.map(r=>r.date))].sort();
+  const cur=ds.value;
+  ds.innerHTML='<option value="">全部日期</option>'+dates.map(d=>`<option value="${d}">${d}</option>`).join("");
+  if(cur && dates.includes(cur)) ds.value=cur;
+  const kw=document.getElementById("kw").value.trim().toLowerCase();
+  let list=records.slice().sort((a,b)=> a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  if(ds.value) list=list.filter(r=>r.date===ds.value);
+  if(kw) list=list.filter(r=>{
+    const drs=recordDrugs(r);
+    const hay=[r.factory,r.scope,r.method,r.note,(r.time||""),drs.map(d=>d.drugName).join(" ")].join(" ").toLowerCase();
+    return hay.includes(kw);
+  });
+  // 统计
+  const confirmedDays=dates.filter(d=>confirmations[d]&&confirmations[d].confirmed).length;
+  document.getElementById("stat").innerHTML=
+    `共 <b>${records.length}</b> 条记录　|　<b>${dates.length}</b> 个日期　|　已签 <b>${confirmedDays}</b> 天　|　服务商：<b>${esc(providerName)}</b>　|　当前筛选 <b>${list.length}</b> 条`;
+  // 表
+  const tbl=document.getElementById("tbl");
+  if(list.length===0){ tbl.innerHTML='<div class="empty">暂无记录（先在填单页提交，或点上方「刷新云端数据」）</div>'; return; }
+  let h='<table><thead><tr><th>消杀日期</th><th>时间</th><th>工厂/区域</th><th>范围</th><th>消杀方式</th><th>药品摘要</th><th>备注</th><th>确认状态</th></tr></thead><tbody>';
+  list.forEach(r=>{
+    const drs=recordDrugs(r);
+    const c=confirmations[r.date]||{};
+    const status = c.confirmed
+      ? `<span class="ok">✓ 已双方签名</span><br><span style="font-size:11px;color:var(--muted)">${esc(c.provider?.name||'')} / ${esc(c.company?.name||'')}</span>`
+      : `<span class="wait">⏳ 待签名</span>`;
+    h+=`<tr>
+      <td>${esc(r.date)}</td><td>${esc(r.time)}</td><td>${esc(r.factory)}</td><td>${esc(r.scope)}</td>
+      <td>${esc(r.method)}</td><td>${esc(drs.map(d=>d.drugName).join("、")||"-")}</td>
+      <td>${esc(r.note)||"-"}</td><td>${status}</td></tr>`;
+  });
+  h+="</tbody></table>";
+  tbl.innerHTML=h;
+}
+
+/* ===== 导出 Excel（双表） ===== */
+function exportExcel(){
+  if(records.length===0){ toast("暂无数据可导出"); return; }
+  const sorted=[...records].sort((a,b)=> a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
+  const head1=["消杀日期","工厂/区域","消杀时间","范围","消杀方式","药品摘要","备注","确认状态","服务商签名人","我司确认人","确认日期"];
+  const data1=[head1];
+  const head2=["消杀日期","工厂/区域","消杀时间","药品名称","靶标生物","配比方式","带入数量","使用量(L)","带出废弃物料/包装","剩余数量(L)"];
+  const data2=[head2];
+  sorted.forEach(r=>{
+    const c=confirmations[r.date]||{};
+    const drs=recordDrugs(r);
+    data1.push([ r.date,r.factory,r.time,r.scope,r.method, drs.map(d=>d.drugName).join("、")||"-", r.note,
+      c.confirmed?"已双方签名":"待签名", c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
+    drs.forEach(d=>{ data2.push([ r.date,r.factory,r.time, d.drugName, (d.targets||[]).join("、")||"-",
+      ratioText(d.ratio), d.bringIn||"", d.used||"", d.waste||"", d.remain||"" ]); });
+  });
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.aoa_to_sheet(data1);
+  ws1["!cols"]=[{wch:12},{wch:14},{wch:10},{wch:16},{wch:12},{wch:20},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws1,"消杀确认记录");
+  const ws2=XLSX.utils.aoa_to_sheet(data2);
+  ws2["!cols"]=[{wch:12},{wch:14},{wch:10},{wch:14},{wch:14},{wch:18},{wch:12},{wch:10},{wch:18},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws2,"药品明细");
+  XLSX.writeFile(wb,"消杀确认记录_"+todayStr()+".xlsx");
+  toast("Excel 已导出");
+}
+
+/* ===== 备份 JSON ===== */
+function exportJSON(){
+  const payload={ provider:providerName, records, confirmations, drugs, exportedAt:new Date().toISOString() };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="消杀数据备份_"+todayStr()+".json"; a.click(); toast("备份已下载");
+}
+
+/* ===== 清空 ===== */
+async function clearAll(){
+  if(!confirm("将清空全部消杀记录与签名，确定？建议先点「备份 JSON」。"))return;
+  if(!confirm("再次确认：清空后无法恢复，需重新录入所有记录。继续？"))return;
+  try{
+    await fetch("/api/state",{method:"DELETE"});
+    records=[]; confirmations={}; render(); toast("已清空");
+  }catch(e){ toast("清空失败："+e.message); }
+}
+
+/* ===== 轻提示 ===== */
+let toastTimer;
+function toast(msg){
+  let t=document.getElementById("xkToast");
+  if(!t){ t=document.createElement("div"); t.id="xkToast";
+    t.style.cssText="position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;z-index:99;opacity:0;transition:opacity .2s";
+    document.body.appendChild(t); }
+  t.textContent=msg; t.style.opacity="1";
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity="0",2200);
+}
+</script>
+</body>
+</html>
