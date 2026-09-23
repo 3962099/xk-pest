@@ -85,7 +85,7 @@ def config_js():
 
 @app.route("/api/health")
 def health():
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "db": "postgres" if USE_PG else "sqlite"})
 
 # 全量状态（同步脚本 / 前端加载用）
 @app.route("/api/state", methods=["GET"])
