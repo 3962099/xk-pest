@@ -81,9 +81,36 @@ def read_state():
     c.close()
     return {"provider": get_meta("provider", "能多洁"), "records": crecs, "confirmations": conf, "drugs": cdr}
 
+# 构建标识：取 index.html 的修改时间，每次部署都会变。
+# 用途：页面里内嵌这个值，前端发现「自己带的版本」与「服务器当前版本」不一致时自动刷新一次，
+#       根治手机浏览器缓存旧版页面（旧版行为差异会让人以为是功能没生效）。
+def _build_id():
+    try:
+        newest = 0
+        for fn in ("index.html", "admin.html", "server.py"):
+            p = os.path.join(BASE, fn)
+            if os.path.exists(p):
+                newest = max(newest, int(os.path.getmtime(p)))
+        return str(newest)
+    except Exception:
+        return "0"
+BUILD_ID = _build_id()
+
+def _serve_page(filename):
+    """读取页面并把 __BUILD__ 占位替换成当前构建号（不缓存，保证手机每次拿到最新版）"""
+    try:
+        with open(os.path.join(BASE, filename), "r", encoding="utf-8") as f:
+            html = f.read()
+    except Exception:
+        return jsonify({"ok": False, "msg": "页面读取失败"}), 500
+    html = html.replace("__BUILD__", BUILD_ID)
+    resp = app.response_class(html, mimetype="text/html; charset=utf-8")
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
+
 @app.route("/")
 def index():
-    return send_from_directory(BASE, "index.html")
+    return _serve_page("index.html")
 
 @app.route("/xlsx.full.min.js")
 def xlsx_js():
@@ -96,11 +123,15 @@ def config_js():
 @app.route("/admin")
 @app.route("/admin.html")
 def admin_page():
-    return send_from_directory(BASE, "admin.html")
+    return _serve_page("admin.html")
+
+@app.route("/api/version")
+def api_version():
+    return jsonify({"build": BUILD_ID})
 
 @app.route("/api/health")
 def health():
-    return jsonify({"ok": True, "db": "postgres" if USE_PG else "sqlite"})
+    return jsonify({"ok": True, "db": "postgres" if USE_PG else "sqlite", "build": BUILD_ID})
 
 # 全量状态（同步脚本 / 前端加载用）
 @app.route("/api/state", methods=["GET"])
