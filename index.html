@@ -188,11 +188,15 @@
       </form>
     </div>
 
-    <!-- 当日记录与签名 -->
+    <!-- 签名确认（只用于签名；本页不显示任何历史记录与状态） -->
     <div class="card">
-      <h2>② 当日记录与签名确认</h2>
-      <div class="date-tabs" id="dateTabs"></div>
-      <div id="dayView"></div>
+      <h2>② 签名确认</h2>
+      <div style="max-width:230px">
+        <label>确认日期</label>
+        <input type="date" id="signDate" onchange="onSignDateChange()">
+      </div>
+      <div class="rot-hint">📱 手机请横屏，签名区域更宽、更好写</div>
+      <div id="signArea"></div>
     </div>
 
 <!-- 数据管理（默认折叠 · 管理员密码） -->
@@ -284,7 +288,6 @@ let providerName = "能多洁（中国）环境科技有限公司";
 let drugs = [];           // 药品库
 let formDrugs = [];       // 当前表单已选药品
 let editingDrugId = null; // 正在编辑的药品 id
-let currentDate = null;
 let API_OK = false;       // 是否连上共享后台
 
 function API(p){ return (window.XK_API_BASE || "") + p; }
@@ -444,7 +447,10 @@ async function boot(){
     }
   }catch(e){ /* 静态环境：保持本机模式 */ }
   document.getElementById("providerName").value = providerName;
-  renderPicker(); render();
+  renderPicker();
+  signDate = todayStr();
+  const sd=document.getElementById("signDate"); if(sd) sd.value = signDate;
+  renderSignArea();
 }
 function switchTab(t){
   document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active", b.dataset.t===t));
@@ -695,9 +701,8 @@ document.getElementById("recForm").addEventListener("submit", e=>{
     drugs:drugsPayload };
   records.push(r);
   if(API_OK){ apiAdd(r).catch(()=>toast("⚠ 提交到云端失败")); } else { persistLocal(); }
-  if(!currentDate) currentDate = r.date;
   toast("已添加：" + zone + " " + factories.join("、") + " " + r.date);
-  resetForm(); render();
+  resetForm(); renderSignArea();
 });
 function resetForm(){
   document.getElementById("fZone").value="";
@@ -711,6 +716,11 @@ function resetForm(){
 /* 每次打开/返回本页都清空表单与签名区，避免上一笔内容残留被误当成本次填写 */
 function blankEverything(){
   try{ resetForm(); }catch(e){}
+  try{
+    signDate = todayStr();
+    const sd=document.getElementById("signDate"); if(sd) sd.value = signDate;
+    renderSignArea();
+  }catch(e){}
   try{ clearPad("padP"); clearPad("padC"); }catch(e){}
   try{
     const p=document.getElementById("pName"); if(p) p.value="";
@@ -723,86 +733,47 @@ blankEverything();
 window.addEventListener("pageshow", ()=>{ blankEverything(); });
 window.addEventListener("load", ()=>{ blankEverything(); });
 
-/* ============ 渲染：日期标签 + 当日视图 ============ */
-function dateList(){ const s=[...new Set(records.map(r=>r.date))]; s.sort().reverse(); return s; }
-function render(){
-  const dates = dateList();
-  const tabs = document.getElementById("dateTabs");
-  if(dates.length===0){ tabs.innerHTML=""; document.getElementById("dayView").innerHTML=
-    '<div class="empty">还没有记录。请在上方「① 新增消杀记录」添加第一条。</div>'; return; }
-  if(!currentDate || !dates.includes(currentDate)) currentDate = dates[0];
-  tabs.innerHTML = dates.map(d=>{
-    const c = confirmations[d];
-    const ok = c && c.confirmed;
-    return `<div class="date-tab ${d===currentDate?'active':''}" onclick="selectDate('${d}')">
-      ${d}<span class="dot ${ok?'ok':'wait'}"></span></div>`;
-  }).join("");
-  renderDay(currentDate);
+/* ============ 渲染：只渲染「签名确认」区（本页不显示任何历史记录）============ */
+let signDate = "";
+function onSignDateChange(){
+  signDate = document.getElementById("signDate").value || todayStr();
+  renderSignArea();
 }
-function selectDate(d){ currentDate=d; render(); }
-
-function drugCellHTML(drs){
-  if(drs.length===0) return '-';
-  return drs.map(d=>`<div class="drug-line"><b>${esc(d.drugName)}</b> <span class="pill">${esc((d.targets||[]).join('、')||'-')}</span> 配比:${esc(ratioText(d.ratio))}<br>带${esc(d.bringIn||'-')}${d.spec?`（${esc(d.spec)}）`:''} 用${esc(d.used||'-')} 剩${esc(d.remain||'-')}｜废:${esc(d.waste||'-')}</div>`).join('');
-}
-function renderDay(d){
-  const list = records.filter(r=>r.date===d).sort((a,b)=>a.time.localeCompare(b.time));
-  const c = confirmations[d] || {};
-  const cs = confState(c);
-  const view = document.getElementById("dayView");
-  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <strong>${d} 当日记录（${list.length} 条）</strong>
-      <span class="status ${cs.cls}">${cs.txt}</span>
-    </div>`;
-  if(list.length===0){ html += '<div class="empty">当天暂无记录</div>'; }
-  else{
-    html += '<table><thead><tr><th>时间</th><th>厂区 / 工厂</th><th>范围</th><th>消杀方式</th><th>药品明细</th><th>备注</th><th></th></tr></thead><tbody>';
-    list.forEach(r=>{
-      const drs=recordDrugs(r);
-      const facs=recFactories(r);
-      html += `<tr><td>${r.time}</td><td>${esc(r.zone||'-')}<br><span class="note" style="font-size:12px">${esc(facs.join("、")||'-')}</span></td><td>${esc(r.scope)}</td>
-        <td>${esc(r.method)}</td><td>${drugCellHTML(drs)}</td><td>${esc(r.note)||'-'}</td>
-        <td><button class="danger" style="padding:4px 8px;font-size:12px" onclick="delRec('${r.id}')">删</button></td></tr>`;
-    });
-    html += '</tbody></table>';
-  }
-  html += `<div class="rot-hint">📱 手机请横屏，签名区域更宽、更好写</div>`;
-  html += `<div class="grid2" style="margin-top:14px">
-    <div class="sign-box">
-      <h3>服务商签名 <span class="note">(消杀方)</span></h3>
-      ${c.provider?.img?`<p class="note" style="color:var(--green)">✓ 服务商已签名：${esc(c.provider.name||'')}${c.providerTs?`（${esc(dateOnly(c.providerTs))}）`:''}</p>`:''}
-      <input id="pName" placeholder="服务商负责人姓名" value="">
-      <div style="margin:8px 0"><canvas id="padP" width="600" height="200"></canvas></div>
-      <div class="btn-row" style="margin-top:4px">
-        <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padP')">清除签名</button>
-        <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="submitPartial('${d}','provider')">✍ 仅提交服务商签名</button>
+function renderSignArea(){
+  const box = document.getElementById("signArea");
+  if(!box) return;
+  const d = signDate || todayStr();
+  box.innerHTML = `
+    <div class="grid2" style="margin-top:6px">
+      <div class="sign-box">
+        <h3>服务商签名 <span class="note">(消杀方)</span></h3>
+        <input id="pName" placeholder="服务商负责人姓名" value="">
+        <div style="margin:8px 0"><canvas id="padP" width="600" height="200"></canvas></div>
+        <div class="btn-row" style="margin-top:4px">
+          <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padP')">清除签名</button>
+          <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="submitPartial('${d}','provider')">✍ 仅提交服务商签名</button>
+        </div>
+      </div>
+      <div class="sign-box">
+        <h3>我司签名 <span class="note">(旺旺确认人)</span></h3>
+        <input id="cName" placeholder="我司确认人姓名" value="">
+        <div style="margin:8px 0"><canvas id="padC" width="600" height="200"></canvas></div>
+        <div class="btn-row" style="margin-top:4px">
+          <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padC')">清除签名</button>
+          <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="submitPartial('${d}','company')">✍ 仅提交我司签名</button>
+        </div>
       </div>
     </div>
-    <div class="sign-box">
-      <h3>我司签名 <span class="note">(旺旺确认人)</span></h3>
-      ${c.company?.img?`<p class="note" style="color:var(--green)">✓ 我司已签名：${esc(c.company.name||'')}${c.companyTs?`（${esc(dateOnly(c.companyTs))}）`:''}</p>`:''}
-      <input id="cName" placeholder="我司确认人姓名" value="">
-      <div style="margin:8px 0"><canvas id="padC" width="600" height="200"></canvas></div>
-      <div class="btn-row" style="margin-top:4px">
-        <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padC')">清除签名</button>
-        <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="submitPartial('${d}','company')">✍ 仅提交我司签名</button>
-      </div>
-    </div>
-  </div>`;
-  html += `<div class="btn-row">
+    <div class="btn-row">
       <button onclick="completeDay('${d}')">✓ 完成当日确认（双方签名）</button>
-      <button class="ghost" onclick="printDay('${d}')">🖨 打印确认单 / 存PDF</button>
     </div>`;
-  if(c.confirmed){
-    html += `<p class="note">已于 ${dateOnly(c.confirmTs)} 完成双方签名确认。可重新签名覆盖。</p>`;
-  } else if(c.provider || c.company){
-    html += `<p class="note">当前为分步签名：已签一方可先提交保存，另一方随时补签，两边都签完状态才变「✓ 双方已签名」。</p>`;
-  }
-  view.innerHTML = html;
-  // 签名区一律从空白开始：不回填云端已存签名，避免误把旧签名当成本次签名再次提交
+  // 一律从空白开始：不回填云端已存签名与姓名
   initPad(document.getElementById("padP"));
   initPad(document.getElementById("padC"));
 }
+/* 兼容旧调用：只刷新签名区里该更新的部分，不重建画板（避免打断正在写的人）*/
+function render(){}
+
 function delRec(id){ if(!confirm("确定删除这条记录？"))return;
   records = records.filter(r=>r.id!==id);
   if(API_OK){ apiDel(id).catch(()=>toast("⚠ 删除失败")); } else { persistLocal(); }
@@ -876,11 +847,11 @@ async function completeDay(d){
       const rr = await fetch(API("/api/state") + "?t=" + Date.now());
       const ss = await rr.json();
       const okCloud = ss.confirmations && ss.confirmations[d] && ss.confirmations[d].confirmed;
-      if(!okCloud){ render(); toast("⚠ 云端未确认到签名，请检查网络后重试"); return; }
+      if(!okCloud){ renderSignArea(); toast("⚠ 云端未确认到签名，请检查网络后重试"); return; }
       confirmations = ss.confirmations || confirmations;
     }catch(err){ toast("⚠ 签名上传失败："+err.message+"，请检查网络后重试"); return; }
   } else { persistLocal(); }
-  render(); toast("✓ 当日确认完成，已双方签名（云端已保存）");
+  renderSignArea(); toast("✓ 当日确认完成，已双方签名（云端已保存）");
 }
 
 /* 单方签名提交：服务商先签 or 我司后补签，互不覆盖（另一方数据保留） */
@@ -901,11 +872,11 @@ async function submitPartial(d, who){
       const rr = await fetch(API("/api/state") + "?t=" + Date.now());
       const ss = await rr.json();
       const got = ss.confirmations && ss.confirmations[d];
-      if(!got || !got[who]){ render(); toast("⚠ 云端未确认到签名，请检查网络后重试"); return; }
+      if(!got || !got[who]){ renderSignArea(); toast("⚠ 云端未确认到签名，请检查网络后重试"); return; }
       confirmations = ss.confirmations || confirmations;
     }catch(err){ toast("⚠ 签名上传失败："+err.message+"，请检查网络后重试"); return; }
   } else { persistLocal(); }
-  render();
+  renderSignArea();
   const cc = confirmations[d] || {};
   if(cc.confirmed) toast("✓ 双方签名已完成");
   else toast(isP?"✓ 服务商签名已提交，待我司补签":"✓ 我司签名已提交" + (cc.provider?"":"，待服务商签名"));
@@ -1064,7 +1035,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1525</span> · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1545</span> · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
