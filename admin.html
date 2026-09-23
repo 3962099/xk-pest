@@ -93,7 +93,7 @@
   <p class="tip">💡 点击表格中任意一行，可查看该条记录的完整详情（药品明细 + 双方签名）</p>
   <div class="stat" id="stat"></div>
   <div class="card"><div id="tbl"></div></div>
-  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1545 · 构建 <span id="buildId">__BUILD__</span></div>
+  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1715 · 构建 <span id="buildId">__BUILD__</span></div>
 </main>
 
 <div id="detail"><div class="box">
@@ -127,6 +127,16 @@ function recFactories(r){
   return [];
 }
 function factoriesText(r){ return recFactories(r).join("、") || "-"; }
+/* 稀释比例 / 施用方法 分开显示 */
+function dilutionText(rt){
+  if(!rt) return "-";
+  const _dil = Array.isArray(rt.dilution) ? rt.dilution : (rt.dilution ? [rt.dilution] : []);
+  if(!_dil.length) return "-";
+  if(_dil.length===1 && /^[\/／]$/.test(_dil[0])) return "/";
+  return _dil.join("、");
+}
+function methodText(rt){ return (rt && rt.method) ? rt.method : "-"; }
+
 /* 只取日期部分（确认时间不显示几点几分） */
 function dateOnly(s){
   s=(s||"").trim();
@@ -267,8 +277,8 @@ function buildPrintHTML(recs){
       </tbody></table>
       <h2>药品明细（${drs.length}）</h2>`;
     if(drs.length){
-      b+='<table class="grid"><thead><tr><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入数量</th><th>规格</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th></tr></thead><tbody>';
-      drs.forEach(d=>{ b+=`<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join('、')||'-')}</td><td>${esc(ratioText(d.ratio))}</td><td>${esc(d.bringIn||'-')}</td><td>${esc(d.spec||'-')}</td><td>${esc(d.used||'-')}</td><td>${esc(d.waste||'-')}</td><td>${esc(d.remain||'-')}</td></tr>`; });
+      b+='<table class="grid"><thead><tr><th>药品名称</th><th>靶标生物</th><th>稀释比例</th><th>施用方法</th><th>带入数量</th><th>规格</th><th>使用量(L)</th><th>带出废弃物料/包装</th><th>剩余数量(L)</th></tr></thead><tbody>';
+      drs.forEach(d=>{ b+=`<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join('、')||'-')}</td><td>${esc(dilutionText(d.ratio))}</td><td>${esc(methodText(d.ratio))}</td><td>${esc(d.bringIn||'-')}</td><td>${esc(d.spec||'-')}</td><td>${esc(d.used||'-')}</td><td>${esc(d.waste||'-')}</td><td>${esc(d.remain||'-')}</td></tr>`; });
       b+='</tbody></table>';
     } else b+='<p class="meta">（无药品记录）</p>';
     b+=`<h2>双方签名</h2><div class="signs">
@@ -308,7 +318,7 @@ function exportExcel(){
   const sorted=[...records].sort((a,b)=> a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
   const head1=["消杀日期","厂区","工厂","消杀时间","范围","消杀方式","药品摘要","备注","确认状态","服务商签名人","我司确认人","确认日期"];
   const data1=[head1];
-  const head2=["消杀日期","厂区","工厂","消杀时间","药品名称","靶标生物","配比方式","带入数量","规格","使用量(L)","带出废弃物料/包装","剩余数量(L)"];
+  const head2=["消杀日期","厂区","工厂","消杀时间","药品名称","靶标生物","稀释比例","施用方法","带入数量","规格","使用量(L)","带出废弃物料/包装","剩余数量(L)"];
   const data2=[head2];
   sorted.forEach(r=>{
     const c=confirmations[r.date]||{};
@@ -318,14 +328,14 @@ function exportExcel(){
       c.confirmed?"已双方签名":(c.provider?"服务商已签·待我司":(c.company?"我司已签·待服务商":"待签名")),
       c.provider?.name||"", c.company?.name||"", c.confirmed?c.confirmTs:"" ]);
     drs.forEach(d=>{ data2.push([ r.date,r.zone||"",facs,r.time, d.drugName, (d.targets||[]).join("、")||"-",
-      ratioText(d.ratio), d.bringIn||"", d.spec||"", d.used||"", d.waste||"", d.remain||"" ]); });
+      dilutionText(d.ratio), methodText(d.ratio), d.bringIn||"", d.spec||"", d.used||"", d.waste||"", d.remain||"" ]); });
   });
   const wb=XLSX.utils.book_new();
   const ws1=XLSX.utils.aoa_to_sheet(data1);
   ws1["!cols"]=[{wch:12},{wch:10},{wch:18},{wch:10},{wch:16},{wch:12},{wch:20},{wch:20},{wch:12},{wch:12},{wch:12},{wch:20}];
   XLSX.utils.book_append_sheet(wb,ws1,"消杀确认记录");
   const ws2=XLSX.utils.aoa_to_sheet(data2);
-  ws2["!cols"]=[{wch:12},{wch:10},{wch:18},{wch:10},{wch:14},{wch:14},{wch:18},{wch:12},{wch:14},{wch:10},{wch:18},{wch:12}];
+  ws2["!cols"]=[{wch:12},{wch:10},{wch:18},{wch:10},{wch:14},{wch:14},{wch:16},{wch:14},{wch:12},{wch:14},{wch:10},{wch:18},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws2,"药品明细");
   XLSX.writeFile(wb,"消杀确认记录_"+todayStr()+".xlsx");
   toast("Excel 已导出");
@@ -368,8 +378,8 @@ function viewDetail(id){
     </div>`;
   h+=`<h3>药品明细（${drs.length}）</h3>`;
   if(drs.length){
-    h+='<table><thead><tr><th>药品名称</th><th>靶标生物</th><th>配比方式</th><th>带入</th><th>规格</th><th>使用量(L)</th><th>带出废弃</th><th>剩余(L)</th></tr></thead><tbody>';
-    drs.forEach(d=>{ h+=`<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join("、")||"-")}</td><td>${esc(ratioText(d.ratio))}</td><td>${esc(d.bringIn||"-")}</td><td>${esc(d.spec||"-")}</td><td>${esc(d.used||"-")}</td><td>${esc(d.waste||"-")}</td><td>${esc(d.remain||"-")}</td></tr>`; });
+    h+='<table><thead><tr><th>药品名称</th><th>靶标生物</th><th>稀释比例</th><th>施用方法</th><th>带入</th><th>规格</th><th>使用量(L)</th><th>带出废弃</th><th>剩余(L)</th></tr></thead><tbody>';
+    drs.forEach(d=>{ h+=`<tr><td>${esc(d.drugName)}</td><td>${esc((d.targets||[]).join("、")||"-")}</td><td>${esc(dilutionText(d.ratio))}</td><td>${esc(methodText(d.ratio))}</td><td>${esc(d.bringIn||"-")}</td><td>${esc(d.spec||"-")}</td><td>${esc(d.used||"-")}</td><td>${esc(d.waste||"-")}</td><td>${esc(d.remain||"-")}</td></tr>`; });
     h+="</tbody></table>";
   } else h+='<div class="empty">无药品记录</div>';
   h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:8px">
