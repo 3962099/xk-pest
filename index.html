@@ -41,10 +41,21 @@
   .grid4{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .grid3c{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .grid2c{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;padding:7px 0;align-items:center}
-  .chip{cursor:pointer;border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:14px;background:#fff;color:var(--txt);user-select:none}
-  .chip.on{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
-  .chips .hint{color:var(--muted);font-size:13px}
+  /* 工厂下拉多选 */
+  .dd{position:relative}
+  .dd-btn{width:100%;text-align:left;background:#fff;color:var(--txt);border:1px solid var(--line);font-weight:400;padding:11px 12px;font-size:15px;border-radius:8px;display:block}
+  .dd-btn:hover{background:#f7faf7}
+  .dd-btn.placeholder{color:#9aa39a}
+  .dd-panel{display:none;position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:260px;overflow:auto;padding:6px}
+  .dd-panel.open{display:block}
+  .dd-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:15px}
+  .dd-item:hover{background:#f0f7f0}
+  .dd-item.on{background:#eaf5ea;font-weight:600;color:var(--green-d)}
+  .dd-item .box{width:18px;height:18px;flex:none;border:1px solid var(--line);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;background:#fff}
+  .dd-item.on .box{background:var(--green);border-color:var(--green)}
+  .dd-tip{padding:8px 10px;font-size:13px;color:var(--muted)}
+  .dd-clear{padding:8px 10px;font-size:13px;color:var(--muted);cursor:pointer;border-top:1px solid var(--line);margin-top:4px}
+  .dd-clear:hover{color:var(--red)}
   @media (max-width:760px){ .grid3c{grid-template-columns:1fr 1fr} }
   button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:11px 16px;
     background:var(--green);color:#fff;font-weight:600}
@@ -149,7 +160,10 @@
             </select>
           </div>
           <div><label>工厂（可多选）</label>
-            <div id="fFactoryBox" class="chips"></div>
+            <div class="dd" id="facDD">
+              <button type="button" id="facDropBtn" class="dd-btn placeholder" onclick="toggleFacDrop(event)">请先选择厂区 ▾</button>
+              <div class="dd-panel" id="facDropPanel"></div>
+            </div>
           </div>
         </div>
         <div><label>范围</label><input id="fScope" placeholder="如：车间 / 干部楼 / 绿化带" required></div>
@@ -310,22 +324,58 @@ const ZONE_FACTORIES = {
 let formFactories = [];
 function onZoneChange(){
   formFactories = [];
-  renderFactoryChips();
+  closeFacDrop();
+  renderFactories();
+}
+function toggleFacDrop(e){
+  if(e) e.stopPropagation();
+  const p = document.getElementById("facDropPanel");
+  if(!p) return;
+  const willOpen = !p.classList.contains("open");
+  p.classList.toggle("open", willOpen);
+  if(willOpen) renderFactories();
+}
+function closeFacDrop(){
+  const p = document.getElementById("facDropPanel");
+  if(p) p.classList.remove("open");
+}
+function clearFactories(e){
+  if(e) e.stopPropagation();
+  formFactories = [];
+  renderFactories();
 }
 function toggleFactory(name){
   const i = formFactories.indexOf(name);
   if(i>=0) formFactories.splice(i,1); else formFactories.push(name);
-  renderFactoryChips();
+  renderFactories();
 }
-function renderFactoryChips(){
-  const box = document.getElementById("fFactoryBox");
-  if(!box) return;
+function renderFactories(){
+  const btn = document.getElementById("facDropBtn");
+  const panel = document.getElementById("facDropPanel");
+  if(!btn || !panel) return;
   const zone = document.getElementById("fZone").value;
-  if(!zone){ box.innerHTML = '<span class="hint">请先在上方选择厂区</span>'; return; }
+  if(!zone){
+    btn.textContent = "请先选择厂区 ▾";
+    btn.classList.add("placeholder");
+    panel.innerHTML = '<div class="dd-tip">请先在上方选择厂区</div>';
+    return;
+  }
   const opts = ZONE_FACTORIES[zone] || [];
-  box.innerHTML = opts.map(o=>`<span class="chip ${formFactories.includes(o)?"on":""}" onclick="toggleFactory('${esc(o)}')">${esc(o)}</span>`).join("")
-    + (formFactories.length ? `<span class="hint">已选 ${formFactories.length} 个</span>` : `<span class="hint">可多选</span>`);
+  const has = formFactories.length > 0;
+  btn.textContent = (has ? formFactories.join("、") : "请选择工厂（可多选）") + "  ▾";
+  btn.classList.toggle("placeholder", !has);
+  panel.innerHTML = opts.map(o=>{
+    const on = formFactories.includes(o);
+    return `<div class="dd-item ${on?"on":""}" onclick="toggleFactory('${esc(o)}')">
+      <span class="box">${on?"✓":""}</span><span>${esc(o)}</span></div>`;
+  }).join("")
+  + (has ? `<div class="dd-clear" onclick="clearFactories(event)">清空已选（${formFactories.length}）</div>` : "");
 }
+/* 点击空白处收起下拉 */
+document.addEventListener("click", e=>{
+  const dd = document.getElementById("facDD");
+  if(dd && !dd.contains(e.target)) closeFacDrop();
+});
 /* 记录里的工厂统一取数组（兼容旧记录） */
 function recFactories(r){
   if(Array.isArray(r.factories) && r.factories.length) return r.factories;
@@ -627,7 +677,7 @@ document.getElementById("recForm").addEventListener("submit", e=>{
 });
 function resetForm(){
   document.getElementById("fZone").value="";
-  formFactories=[]; renderFactoryChips();
+  formFactories=[]; closeFacDrop(); renderFactories();
   document.getElementById("fScope").value="";
   document.getElementById("fNote").value="";
   document.getElementById("fDate").value = todayStr();
@@ -635,7 +685,7 @@ function resetForm(){
   formDrugs = []; renderFormDrugs();
 }
 renderFormDrugs();
-renderFactoryChips();
+renderFactories();
 
 /* ============ 渲染：日期标签 + 当日视图 ============ */
 function dateList(){ const s=[...new Set(records.map(r=>r.date))]; s.sort().reverse(); return s; }
@@ -977,7 +1027,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1430</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1440</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
