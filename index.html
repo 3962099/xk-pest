@@ -691,8 +691,20 @@ function resetForm(){
   document.getElementById("fTime").value = "09:00";
   formDrugs = []; renderFormDrugs();
 }
+/* 每次打开/返回本页都清空表单与签名区，避免上一笔内容残留被误当成本次填写 */
+function blankEverything(){
+  try{ resetForm(); }catch(e){}
+  try{ clearPad("padP"); clearPad("padC"); }catch(e){}
+  try{
+    const p=document.getElementById("pName"); if(p) p.value="";
+    const c=document.getElementById("cName"); if(c) c.value="";
+  }catch(e){}
+}
 renderFormDrugs();
 renderFactories();
+blankEverything();
+window.addEventListener("pageshow", ()=>{ blankEverything(); });
+window.addEventListener("load", ()=>{ blankEverything(); });
 
 /* ============ 渲染：日期标签 + 当日视图 ============ */
 function dateList(){ const s=[...new Set(records.map(r=>r.date))]; s.sort().reverse(); return s; }
@@ -741,8 +753,8 @@ function renderDay(d){
   html += `<div class="grid2" style="margin-top:14px">
     <div class="sign-box">
       <h3>服务商签名 <span class="note">(消杀方)</span></h3>
-      ${c.provider?.img?`<p class="note" style="color:var(--green)">✓ 服务商已签名：${esc(c.provider.name||'')}${c.providerTs?`（${esc(c.providerTs)}）`:''}</p>`:''}
-      <input id="pName" placeholder="服务商负责人姓名" value="${c.provider?.name||''}">
+      ${c.provider?.img?`<p class="note" style="color:var(--green)">✓ 服务商已签名：${esc(c.provider.name||'')}${c.providerTs?`（${esc(dateOnly(c.providerTs))}）`:''}</p>`:''}
+      <input id="pName" placeholder="服务商负责人姓名" value="">
       <div style="margin:8px 0"><canvas id="padP" width="600" height="200"></canvas></div>
       <div class="btn-row" style="margin-top:4px">
         <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padP')">清除签名</button>
@@ -751,8 +763,8 @@ function renderDay(d){
     </div>
     <div class="sign-box">
       <h3>我司签名 <span class="note">(旺旺确认人)</span></h3>
-      ${c.company?.img?`<p class="note" style="color:var(--green)">✓ 我司已签名：${esc(c.company.name||'')}${c.companyTs?`（${esc(c.companyTs)}）`:''}</p>`:''}
-      <input id="cName" placeholder="我司确认人姓名" value="${c.company?.name||''}">
+      ${c.company?.img?`<p class="note" style="color:var(--green)">✓ 我司已签名：${esc(c.company.name||'')}${c.companyTs?`（${esc(dateOnly(c.companyTs))}）`:''}</p>`:''}
+      <input id="cName" placeholder="我司确认人姓名" value="">
       <div style="margin:8px 0"><canvas id="padC" width="600" height="200"></canvas></div>
       <div class="btn-row" style="margin-top:4px">
         <button class="ghost" style="padding:6px 10px;font-size:13px" onclick="clearPad('padC')">清除签名</button>
@@ -770,10 +782,9 @@ function renderDay(d){
     html += `<p class="note">当前为分步签名：已签一方可先提交保存，另一方随时补签，两边都签完状态才变「✓ 双方已签名」。</p>`;
   }
   view.innerHTML = html;
+  // 签名区一律从空白开始：不回填云端已存签名，避免误把旧签名当成本次签名再次提交
   initPad(document.getElementById("padP"));
   initPad(document.getElementById("padC"));
-  if(c.provider?.img){ drawFromData(document.getElementById("padP"), c.provider.img); }
-  if(c.company?.img){ drawFromData(document.getElementById("padC"), c.company.img); }
 }
 function delRec(id){ if(!confirm("确定删除这条记录？"))return;
   records = records.filter(r=>r.id!==id);
@@ -816,7 +827,7 @@ function initPad(canvas){
 function relayoutPads(){ ["padP","padC"].forEach(id=>{ const c=document.getElementById(id); if(c) fitPad(c); }); }
 window.addEventListener("resize", relayoutPads);
 window.addEventListener("orientationchange", ()=>setTimeout(relayoutPads,300));
-function clearPad(id){ const c=document.getElementById(id); const x=c.getContext("2d");
+function clearPad(id){ const c=document.getElementById(id); if(!c) return; const x=c.getContext("2d"); if(!x) return;
   x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height); }
 function drawFromData(canvas, dataUrl){
   const img=new Image(); img.onload=()=>{ const x=canvas.getContext("2d");
@@ -1036,7 +1047,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1455</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1515</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
