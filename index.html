@@ -411,8 +411,25 @@ function confState(c){
 }
 function isValidNum(v){ return /^\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(v) || /^\d+(\.\d+)?%$/.test(v); }
 
+/* 页面自带的构建号（由服务器注入）；用于识别浏览器是否在用缓存旧版 */
+const PAGE_BUILD = "__BUILD__";
+async function checkBuild(){
+  try{
+    if(!PAGE_BUILD || PAGE_BUILD.indexOf("__")===0) return false; // 本地直接打开文件时不检查
+    const r = await fetch("/api/version?t=" + Date.now());
+    if(!r.ok) return false;
+    const j = await r.json();
+    if(j && j.build && j.build !== PAGE_BUILD){
+      const key = "xk_reload_" + j.build;
+      if(!sessionStorage.getItem(key)){ sessionStorage.setItem(key, "1"); location.reload(); return true; }
+    }
+  }catch(e){}
+  return false;
+}
+
 /* 启动时自动判断：连上后台就用共享数据，否则用本机存储 */
 async function boot(){
+  if(await checkBuild()) return;   // 手机若拿到缓存旧版，自动刷新一次换新版
   try{
     const r = await fetch(API("/api/state"));
     if(r.ok){
@@ -1047,7 +1064,7 @@ boot();
 </script>
 
 <div style="text-align:center; color:#9aa39a; font-size:12px; padding:14px 10px 22px">
-  页面版本 <span id="buildStamp">v2026-09-23-1515</span> · 若看不到此版本号或为旧号，请关闭页面重新打开以加载最新版
+  页面版本 <span id="buildStamp">v2026-09-23-1525</span> · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版
 </div>
 </body>
 </html>
