@@ -93,7 +93,7 @@
   <p class="tip">💡 点击表格中任意一行，可查看该条记录的完整详情（药品明细 + 双方签名）</p>
   <div class="stat" id="stat"></div>
   <div class="card"><div id="tbl"></div></div>
-  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1455</div>
+  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1525 · 构建 <span id="buildId">__BUILD__</span></div>
 </main>
 
 <div id="detail"><div class="box">
@@ -135,23 +135,43 @@ function dateOnly(s){
   return m ? m[1] : s.split(/\s+/)[0];
 }
 
+/* ===== 页面自带构建号（服务器注入）：识别缓存旧版并自动刷新 ===== */
+const PAGE_BUILD = "__BUILD__";
+async function checkBuild(){
+  try{
+    if(!PAGE_BUILD || PAGE_BUILD.indexOf("__")===0) return false;
+    const r = await fetch("/api/version?t=" + Date.now());
+    if(!r.ok) return false;
+    const j = await r.json();
+    if(j && j.build && j.build !== PAGE_BUILD){
+      const key = "xk_reload_" + j.build;
+      if(!sessionStorage.getItem(key)){ sessionStorage.setItem(key, "1"); location.reload(); return true; }
+    }
+  }catch(e){}
+  return false;
+}
+
 /* ===== 密码门 ===== */
 const ADMIN_PWD="8888";
-function unlock(){
+async function unlock(){
   const v=document.getElementById("pwd").value.trim();
   if(v===ADMIN_PWD){
     sessionStorage.setItem("xk_admin","ok");
     document.getElementById("lock").style.display="none";
+    if(await checkBuild()) return;
     load(true);
   } else {
     document.getElementById("lockErr").textContent="密码错误，请重试";
   }
 }
 document.getElementById("pwd").addEventListener("keydown",e=>{ if(e.key==="Enter") unlock(); });
-if(sessionStorage.getItem("xk_admin")==="ok"){
-  document.getElementById("lock").style.display="none";
-  load(true);
-}
+(async ()=>{
+  if(await checkBuild()) return;   // 若为缓存旧版，自动刷新一次
+  if(sessionStorage.getItem("xk_admin")==="ok"){
+    document.getElementById("lock").style.display="none";
+    load(true);
+  }
+})();
 
 /* ===== 拉取云端数据 ===== */
 async function load(showToast){
