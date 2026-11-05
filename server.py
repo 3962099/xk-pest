@@ -25,7 +25,7 @@ app = Flask(__name__, static_folder=None)
 @app.after_request
 def _cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,DELETE,OPTIONS"
+    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return resp
 
@@ -57,6 +57,8 @@ def ensure():
     k.execute(adapt("CREATE TABLE IF NOT EXISTS confirmations(date TEXT PRIMARY KEY, data TEXT)"))
     k.execute(adapt("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)"))
     k.execute(adapt("CREATE TABLE IF NOT EXISTS drugs(id TEXT PRIMARY KEY, data TEXT)"))
+    # 现场服务报告：一份报告 = 主表 SR + 9 张子表，整份以 JSON 保存（点位多但只存填过的行）
+    k.execute(adapt("CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY, date TEXT, data TEXT, created_at TEXT, updated_at TEXT)"))
     c.commit(); c.close()
 
 def get_meta(kk, d=None):
@@ -70,6 +72,13 @@ def set_meta(kk, v):
     k.execute(adapt("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=?"), (kk, v, v))
     c.commit(); c.close()
 
+def report_summary(r):
+    """列表只回摘要，不回 9 张子表的大对象"""
+    return {"id": r.get("id"), "date": r.get("date", ""),
+            "title": r.get("title") or ("现场服务报告 " + str(r.get("date", ""))),
+            "client": r.get("client", ""), "progress": r.get("progress", 0),
+            "createdAt": r.get("createdAt", ""), "updatedAt": r.get("updatedAt", "")}
+
 def read_state():
     c = conn(); k = cur(c)
     k.execute(adapt("SELECT data FROM records ORDER BY created_at"))
@@ -78,8 +87,11 @@ def read_state():
     conf = {d: json.loads(v) for d, v in k.fetchall()}
     k.execute(adapt("SELECT data FROM drugs ORDER BY id"))
     cdr = [json.loads(r[0]) for r in k.fetchall()]
+    k.execute(adapt("SELECT data FROM reports ORDER BY created_at DESC"))
+    crep = [report_summary(json.loads(r[0])) for r in k.fetchall()]
     c.close()
-    return {"provider": get_meta("provider", "能多洁"), "records": crecs, "confirmations": conf, "drugs": cdr}
+    return {"provider": get_meta("provider", "能多洁"), "records": crecs,
+            "confirmations": conf, "drugs": cdr, "reports": crep}
 
 # 构建标识：取 index.html 的修改时间，每次部署都会变。
 # 用途：页面里内嵌这个值，前端发现「自己带的版本」与「服务器当前版本」不一致时自动刷新一次，
@@ -87,7 +99,7 @@ def read_state():
 def _build_id():
     try:
         newest = 0
-        for fn in ("index.html", "admin.html", "server.py"):
+        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py"):
             p = os.path.join(BASE, fn)
             if os.path.exists(p):
                 newest = max(newest, int(os.path.getmtime(p)))
@@ -104,7 +116,7 @@ def _serve_page(filename):
     except Exception:
         return jsonify({"ok": False, "msg": "页面读取失败"}), 500
     html = html.replace("__BUILD__", BUILD_ID)
-    resp = app.response_class(html, mimetype="text/html; charset=utf-8")
+    resp = app.response_class(html, content_type="text/html; charset=utf-8")
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resp
 
@@ -119,6 +131,17 @@ def xlsx_js():
 @app.route("/config.js")
 def config_js():
     return send_from_directory(BASE, "config.js")
+
+@app.route("/stations.js")
+def stations_js():
+    resp = send_from_directory(BASE, "stations.js")
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
+
+@app.route("/report")
+@app.route("/report.html")
+def report_page():
+    return _serve_page("report.html")
 
 @app.route("/admin")
 @app.route("/admin.html")
@@ -263,11 +286,63 @@ def delete_drug(did):
     c.commit(); c.close()
     return jsonify({"ok": True})
 
+# ===== 现场服务报告：一份报告 = SR 主表 + 9 张子表 =====
+def _now():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+@app.route("/api/reports", methods=["GET"])
+def list_reports():
+    c = conn(); k = cur(c)
+    k.execute(adapt("SELECT data FROM reports ORDER BY created_at DESC"))
+    rows = [report_summary(json.loads(r[0])) for r in k.fetchall()]
+    c.close()
+    return jsonify(rows)
+
+@app.route("/api/reports/<rid>", methods=["GET"])
+def get_report(rid):
+    c = conn(); k = cur(c)
+    k.execute(adapt("SELECT data FROM reports WHERE id=?"), (rid,))
+    row = k.fetchone(); c.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "报告不存在"}), 404
+    return jsonify(json.loads(row[0]))
+
+@app.route("/api/reports", methods=["POST"])
+def save_report():
+    try:
+        r = request.get_json(force=True)
+    except Exception:
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    if not isinstance(r, dict):
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    rid = r.get("id") or ("R" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + os.urandom(3).hex())
+    r["id"] = rid
+    now = _now()
+    r.setdefault("createdAt", now)
+    r["updatedAt"] = now
+    r.setdefault("title", "现场服务报告 " + str(r.get("date") or ""))
+    payload = json.dumps(r, ensure_ascii=False)
+    c = conn(); k = cur(c)
+    k.execute(adapt("INSERT INTO reports(id,date,data,created_at,updated_at) VALUES(?,?,?,?,?) "
+                    "ON CONFLICT(id) DO UPDATE SET date=?, data=?, updated_at=?"),
+              (rid, r.get("date") or "", payload, r["createdAt"], now,
+               r.get("date") or "", payload, now))
+    c.commit(); c.close()
+    return jsonify({"ok": True, "id": rid, "report": r})
+
+@app.route("/api/reports/<rid>", methods=["DELETE"])
+def delete_report(rid):
+    c = conn(); k = cur(c)
+    k.execute(adapt("DELETE FROM reports WHERE id=?"), (rid,))
+    c.commit(); c.close()
+    return jsonify({"ok": True})
+
 # 清空全部数据（管理用，需谨慎）
 @app.route("/api/state", methods=["DELETE"])
 def reset_state():
     c = conn(); k = cur(c)
     k.execute(adapt("DELETE FROM records")); k.execute(adapt("DELETE FROM confirmations"))
+    k.execute(adapt("DELETE FROM reports"))
     c.commit(); c.close()
     return jsonify({"ok": True})
 

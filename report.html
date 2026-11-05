@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>现场服务报告 · 服务商录入</title>
+<script src="./stations.js"></script>
+<style>
+  :root{ --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
+    --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.5;font-size:15px}
+  header{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;padding:12px 16px;
+    position:sticky;top:0;z-index:20}
+  header h1{margin:0;font-size:17px}
+  header .nav{display:flex;gap:14px;margin-top:6px;font-size:13px}
+  header .nav a{color:#e8f5e9;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.4)}
+  .wrap{max-width:1000px;margin:0 auto;padding:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .card h2{margin:0 0 10px;font-size:16px}
+  h3{font-size:14px;margin:14px 0 8px}
+  label{display:block;font-size:13px;color:var(--muted);margin:9px 0 4px}
+  input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;
+    font-size:15px;background:#fff;color:var(--txt)}
+  textarea{resize:vertical}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:10px 15px;
+    background:var(--green);color:#fff;font-weight:600}
+  button.ghost{background:#fff;color:var(--green);border:1px solid var(--green);font-weight:400}
+  button.danger{background:#fff;color:var(--red);border:1px solid var(--red);font-weight:400}
+  button.mini{font-size:12px;padding:5px 9px;font-weight:400}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .sheet-tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;margin-bottom:4px}
+  .sheet-tab{flex:0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:18px;
+    background:#fff;font-size:13px;white-space:nowrap;color:var(--muted);cursor:pointer}
+  .sheet-tab.active{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
+  .sheet-tab .n{font-size:11px;opacity:.75;margin-left:4px}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+  .bar strong{color:var(--txt)}
+  .pill{display:inline-block;font-size:12px;padding:3px 10px;border-radius:20px;font-weight:600}
+  .pill.ok{background:#e6f4ea;color:var(--green-d)}
+  .pill.wait{background:#fdeede;color:var(--amber)}
+  .chip{display:inline-block;padding:6px 11px;margin:3px 5px 3px 0;border:1px solid var(--line);
+    border-radius:18px;background:#fff;font-size:13px;cursor:pointer;color:var(--txt)}
+  .chip.on{background:var(--green);color:#fff;border-color:var(--green)}
+  .chip.redon{background:var(--red);color:#fff;border-color:var(--red)}
+  .grp{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden;background:#fff}
+  .grp-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f7faf7;
+    cursor:pointer;flex-wrap:wrap}
+  .grp-head .gname{font-weight:600;font-size:14px;min-width:56px}
+  .grp-head .ginfo{font-size:12px;color:var(--muted);flex:1}
+  .grp-body{display:none;padding:6px;overflow-x:auto}
+  .grp.open .grp-body{display:block}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{border:1px solid var(--line);padding:4px 5px;text-align:left;vertical-align:middle;white-space:nowrap}
+  th{background:#f0f4f0;font-weight:600;position:sticky;top:0}
+  td input{padding:5px;font-size:13px;min-width:90px;border:1px solid #eee;border-radius:5px}
+  td.sid{font-weight:600;background:#fafbfa;min-width:64px}
+  .cellbtn{width:28px;height:28px;padding:0;font-size:13px;font-weight:600;border-radius:6px;
+    background:#fff;color:#9aa39a;border:1px solid var(--line)}
+  .cellbtn.v0{background:#e6f4ea;color:var(--green-d);border-color:#a5d6a7}
+  .cellbtn.v1{background:#fdecec;color:var(--red);border-color:#ef9a9a}
+  .cellbtn.vE{background:#fff;color:#bbb}
+  .sign-box{border:1px dashed var(--line);border-radius:10px;padding:12px;margin-top:10px;background:#fafbfa}
+  canvas{border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;height:200px;
+    display:block;touch-action:none}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:rgba(0,0,0,.85);
+    color:#fff;padding:10px 18px;border-radius:24px;font-size:14px;opacity:0;transition:.3s;
+    z-index:99;pointer-events:none;max-width:88vw;text-align:center}
+  .toast.show{opacity:1}
+  .empty{color:var(--muted);text-align:center;padding:20px 0;font-size:14px}
+  .scroll{overflow-x:auto}
+  @media(max-width:760px){ .grid2,.grid3{grid-template-columns:1fr} .wrap{padding:9px} .card{padding:11px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>现场服务报告 · 服务商录入</h1>
+  <div class="nav"><a href="./">填单页</a><a href="./admin">管理后台</a></div>
+</header>
+<div class="wrap">
+
+  <div class="card">
+    <h2>① 选择报告</h2>
+    <div class="grid2" style="grid-template-columns:1fr auto auto;gap:8px;align-items:end">
+      <div><label>已有报告</label><select id="reportSel" onchange="onSelectReport()"></select></div>
+      <div><button class="ghost" onclick="newReport()">＋ 新建报告</button></div>
+      <div><button class="danger" onclick="deleteReport()">🗑 删除</button></div>
+    </div>
+    <div class="bar" style="margin-top:10px">
+      <span>服务日期 <input type="date" id="rDate" style="width:auto;display:inline-block;padding:6px 8px" onchange="onDateChange()"></span>
+      <span id="progressTxt">—</span>
+      <span id="signPill"></span>
+    </div>
+    <div class="note">打开页面一律是空白新报告。要继续填之前保存过的报告，从上方下拉选择即可。</div>
+  </div>
+
+  <div class="card">
+    <h2>② 逐张填写（9 张表）</h2>
+    <div class="sheet-tabs" id="sheetTabs"></div>
+    <div id="sheetBody"></div>
+    <div class="btn-row">
+      <button onclick="saveReport(false)">💾 保存报告</button>
+      <button class="ghost" onclick="prevSheet()">← 上一张</button>
+      <button class="ghost" onclick="nextSheet()">下一张 →</button>
+    </div>
+    <div class="note">切换表格时会自动保存。未填的点位默认视为「无异常」，导出时会按空白列出。</div>
+  </div>
+
+  <div class="card">
+    <h2>③ 服务商签名</h2>
+    <div id="signStatus" class="bar"></div>
+    <div class="sign-box">
+      <label>服务商负责人姓名</label>
+      <input id="pName" placeholder="请输入姓名" style="max-width:260px">
+      <div style="margin:8px 0"><canvas id="padP" width="600" height="200"></canvas></div>
+      <div class="btn-row">
+        <button class="ghost mini" onclick="clearPad('padP')">清除签名</button>
+        <button onclick="submitProviderSign()">✍ 提交服务商签名</button>
+      </div>
+      <div class="note">提交后，我司会在管理后台补签；两边签名互不覆盖。</div>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:var(--muted);font-size:12px;padding:8px 0 20px">
+    页面版本 v2026-11-05-1100 · 构建 <span id="buildId">__BUILD__</span>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PAGE_BUILD = "__BUILD__";
+const ST = window.XK_STATIONS || {}, SH = window.XK_SHEETS || {}, ORDER = window.XK_SHEET_ORDER || [];
+const CHECK = ["E","H","G","F-1","F-2"];
+const DEF_CLIENT = "广州旺旺食品有限公司、广州立旺食品有限公司、广州大旺食品有限公司、广州必旺食品有限公司、广州祥旺食品有限公司、广州永旺食品有限公司、广州明旺乳业有限公司";
+
+let reports = [], R = null, activeSheet = "SR", confirmations = {}, state = null;
+let dirty = false, openGroups = {}, stationQuery = "";
+
+function API(p){ return (window.XK_API_BASE || "") + p; }
+function ea(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show");
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove("show"),2600); }
+
+async function checkBuild(){
+  if(!PAGE_BUILD || PAGE_BUILD.indexOf("__")===0) return false;
+  try{
+    const r = await fetch(API("/api/version"), {cache:"no-store"});
+    const j = await r.json();
+    if(j && j.build && j.build !== PAGE_BUILD){
+      const key = "xk_reload_" + j.build;
+      if(!sessionStorage.getItem(key)){ sessionStorage.setItem(key,"1"); location.reload(); return true; }
+    }
+  }catch(e){}
+  return false;
+}
+
+function emptySheets(){
+  const s = {SR:{fields:{},materials:[]}};
+  CHECK.forEach(n=>{ s[n]={}; });
+  ["消杀记录","物料进出厂清单","CAPA"].forEach(n=>{ s[n]=[]; });
+  return s;
+}
+function normalize(r){
+  if(!r) return;
+  r.sheets = r.sheets || emptySheets();
+  const d = emptySheets();
+  for(const k in d){ if(!r.sheets[k]) r.sheets[k]=d[k]; }
+  if(!r.sheets.SR.fields) r.sheets.SR.fields={};
+  if(!r.sheets.SR.materials) r.sheets.SR.materials=[];
+  r.date = r.date || todayStr();
+  r.client = r.client || DEF_CLIENT;
+}
+function groups(name){
+  const out = [], map = {};
+  (ST[name]||[]).forEach(id=>{
+    const g = (String(id).match(/^[0-9]?[A-Za-z]+/)||["其他"])[0];
+    if(!map[g]){ map[g]=[]; out.push(g); }
+    map[g].push(id);
+  });
+  return out.map(g=>({g,ids:map[g]}));
+}
+function calcProgress(){
+  let filled=0, total=0;
+  CHECK.forEach(n=>{ total += (ST[n]||[]).length; filled += Object.keys((R&&R.sheets&&R.sheets[n])||{}).length; });
+  return {filled,total};
+}
+function signInfo(){
+  const c = confirmations[R && R.date] || {};
+  if(c.confirmed) return {cls:"ok",txt:"✓ 双方已签名",p:c.provider||{},co:c.company||{}};
+  if(c.provider) return {cls:"wait",txt:"🟡 服务商已签，待我司签名",p:c.provider||{},co:c.company||{}};
+  if(c.company) return {cls:"wait",txt:"🟡 我司已签，待服务商签名",p:c.provider||{},co:c.company||{}};
+  return {cls:"wait",txt:"⏳ 待签名",p:{},co:{}};
+}
+
+/* ===== 数据存取 ===== */
+async function loadAll(){
+  const r = await fetch(API("/api/state"), {cache:"no-store"});
+  if(!r.ok) throw new Error("state HTTP "+r.status);
+  state = await r.json();
+  reports = state.reports || [];
+  confirmations = state.confirmations || {};
+  renderReportSel();
+}
+function renderReportSel(){
+  const sel=document.getElementById("reportSel");
+  sel.innerHTML = '<option value="">— 新建 / 未选择 —</option>' +
+    reports.map(x=>`<option value="${ea(x.id)}"${R&&R.id===x.id?" selected":""}>${ea(x.date)} · ${ea(x.title)} · 已填 ${x.progress||0}</option>`).join("");
+}
+async function onSelectReport(){
+  const id=document.getElementById("reportSel").value;
+  if(!id){ return; }
+  await saveIfDirty();
+  const r=await fetch(API("/api/reports/"+encodeURIComponent(id)),{cache:"no-store"});
+  if(!r.ok){ toast("读取报告失败"); return; }
+  R=await r.json(); normalize(R); activeSheet="SR"; stationQuery=""; openGroups={};
+  renderAll(); toast("已打开报告");
+}
+async function newReport(){
+  await saveIfDirty();
+  R={date:todayStr(),client:DEF_CLIENT,sheets:emptySheets(),progress:0};
+  activeSheet="SR"; stationQuery=""; openGroups={}; dirty=true;
+  document.getElementById("reportSel").value="";
+  renderAll(); toast("已新建空白报告");
+}
+async function deleteReport(){
+  if(!R||!R.id){ toast("这是尚未保存的新报告"); return; }
+  if(!confirm("确定删除这份报告？删除后无法恢复。")) return;
+  const r=await fetch(API("/api/reports/"+encodeURIComponent(R.id)),{method:"DELETE"});
+  if(!r.ok){ toast("删除失败"); return; }
+  await loadAll(); R=null; renderAll(); toast("已删除");
+}
+function onDateChange(){
+  if(!R) return;
+  R.date=document.getElementById("rDate").value||todayStr();
+  dirty=true; renderSignStatus();
+}
+async function saveReport(loud){
+  if(!R){ toast("请先新建或选择报告"); return false; }
+  const di=document.getElementById("rDate");
+  if(di && di.value) R.date=di.value;
+  R.progress=calcProgress().filled;
+  R.title="现场服务报告 "+R.date;
+  const r=await fetch(API("/api/reports"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(R)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok){ toast("保存失败："+(j.msg||r.status)); return false; }
+  R.id=j.id; dirty=false;
+  await loadAll(); renderReportSel(); renderProgress();
+  if(loud) toast("✓ 报告已保存");
+  return true;
+}
+async function saveIfDirty(){ if(dirty && R) await saveReport(true); }
+
+/* ===== 渲染 ===== */
+function renderAll(){
+  if(!R){ document.getElementById("sheetBody").innerHTML='<div class="empty">请点「＋ 新建报告」开始，或从上方选择已有报告</div>';
+    document.getElementById("sheetTabs").innerHTML=""; document.getElementById("signPill").innerHTML="";
+    document.getElementById("progressTxt").textContent="—"; return; }
+  document.getElementById("rDate").value=R.date||todayStr();
+  renderTabs(); renderProgress(); renderSignStatus(); renderSheet();
+}
+function renderTabs(){
+  document.getElementById("sheetTabs").innerHTML = ORDER.map((n,i)=>{
+    const cnt = n==="SR" ? "" : (SH[n].kind==="station" ? `<span class="n">${(ST[n]||[]).length}点</span>` : `<span class="n">${SH[n].rows}行</span>`);
+    return `<button class="sheet-tab${activeSheet===n?" active":""}" onclick="switchSheet('${ea(n)}')">${i+1}. ${ea(SH[n].title)}${cnt}</button>`;
+  }).join("");
+}
+function renderProgress(){
+  const p=calcProgress();
+  document.getElementById("progressTxt").innerHTML=`已填点位 <strong>${p.filled}</strong> / ${p.total}`;
+}
+function renderSignStatus(){
+  const s=signInfo();
+  document.getElementById("signPill").innerHTML=`<span class="pill ${s.cls}">${ea(s.txt)}</span>`;
+  document.getElementById("signStatus").innerHTML=`<span>当前状态</span><span class="pill ${s.cls}">${ea(s.txt)}</span>`+
+    (s.p.name?`<span>服务商：${ea(s.p.name)}</span>`:"")+(s.co.name?`<span>我司：${ea(s.co.name)}</span>`:"");
+}
+async function switchSheet(n){
+  if(n===activeSheet) return;
+  await saveIfDirty();
+  activeSheet=n; stationQuery=""; renderTabs(); renderSheet();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function prevSheet(){ const i=ORDER.indexOf(activeSheet); if(i>0) switchSheet(ORDER[i-1]); }
+function nextSheet(){ const i=ORDER.indexOf(activeSheet); if(i<ORDER.length-1) switchSheet(ORDER[i+1]); }
+function renderSheet(){
+  const n=activeSheet;
+  if(n==="SR") return renderSR();
+  if(SH[n].kind==="station") return renderStation(n);
+  return renderFree(n);
+}
+
+/* ---- SR 主表 ---- */
+function renderSR(){
+  const def=SH.SR, f=R.sheets.SR.fields, mats=R.sheets.SR.materials;
+  let h=`<h3>基本信息</h3><div class="grid2">`;
+  def.fields.forEach(fd=>{
+    const v=f[fd.k]!=null?f[fd.k]:(fd.def||"");
+    if(fd.type==="multi"){
+      const on=Array.isArray(v)?v:[];
+      h+=`<div style="grid-column:1/-1"><label>${ea(fd.t)}</label><div id="sr_${fd.k}">`+
+        fd.opts.map(o=>`<span class="chip${on.indexOf(o)>=0?" on":""}" onclick="toggleMulti('${fd.k}','${ea(o)}',this)">${ea(o)}</span>`).join("")+`</div></div>`;
+    }else if(fd.type==="yesno"){
+      h+=`<div style="grid-column:1/-1"><label>${ea(fd.t)}</label><div>`+
+        ['是','不是'].map(o=>`<span class="chip${v===o?" on":""}" onclick="setSR('${fd.k}','${o}',this.parentNode)">${o}</span>`).join("")+`</div></div>`;
+    }else if(fd.type==="radio"){
+      h+=`<div><label>${ea(fd.t)}</label><div>`+fd.opts.map(o=>`<span class="chip${v===o?" redon":""}" onclick="setSR('${fd.k}','${o}',this.parentNode)">${ea(o)}</span>`).join("")+`</div></div>`;
+    }else if(fd.type==="textarea"){
+      h+=`<div${fd.t.length>14?' style="grid-column:1/-1"':''}><label>${ea(fd.t)}</label><textarea rows="2" oninput="setSRVal('${fd.k}',this.value)">${ea(v)}</textarea></div>`;
+    }else{
+      h+=`<div><label>${ea(fd.t)}${fd.req?" *":""}</label><input type="${fd.type}" value="${ea(v)}" oninput="setSRVal('${fd.k}',this.value)"></div>`;
+    }
+  });
+  h+=`</div>`;
+  h+=`<h3>物料使用记录（主表）</h3><div class="scroll"><table><thead><tr><th style="min-width:50px">行</th>`+
+    def.materialHead.map(x=>`<th>${ea(x)}</th>`).join("")+`</tr></thead><tbody>`;
+  for(let i=0;i<def.materialRows;i++){
+    const row=mats[i]||{};
+    h+=`<tr><td class="sid">${i+1}</td>`+def.materialHead.map((_,j)=>
+      `<td><input value="${ea(row['m'+j])}" oninput="setMat(${i},${j},this.value)"></td>`).join("")+`</tr>`;
+  }
+  h+=`</tbody></table></div>`;
+  h+=`<div class="btn-row"><button class="ghost mini" onclick="importDayRecords('SR')">↧ 从当天消杀记录带入</button></div>`;
+  document.getElementById("sheetBody").innerHTML=h;
+}
+function setSRVal(k,v){ R.sheets.SR.fields[k]=v; dirty=true; if(k==="date"){R.date=v;document.getElementById("rDate").value=v;} }
+function setSR(k,v,box){ R.sheets.SR.fields[k]=v; dirty=true;
+  [...box.children].forEach(c=>c.classList.remove("on","redon"));
+  [...box.children].find(c=>c.textContent===v)?.classList.add(k==="risk"?"redon":"on"); }
+function toggleMulti(k,o,el){ const f=R.sheets.SR.fields; const a=Array.isArray(f[k])?f[k]:[];
+  const i=a.indexOf(o); if(i>=0)a.splice(i,1); else a.push(o); f[k]=a; dirty=true; el.classList.toggle("on"); }
+function setMat(i,j,v){ const m=R.sheets.SR.materials; while(m.length<=i)m.push({}); m[i]['m'+j]=v; dirty=true; }
+
+/* ---- 点位检查表 ---- */
+function renderStation(n){
+  const def=SH[n], data=R.sheets[n]||(R.sheets[n]={}), gs=groups(n);
+  const q=stationQuery.trim().toUpperCase();
+  const filled=Object.keys(data).length, total=(ST[n]||[]).length;
+  let h=`<h3>${ea(def.title)} <span class="note">（${total} 个点位，已填 ${filled}）</span></h3>`;
+  h+=`<div class="bar" style="margin-bottom:8px">
+      <input id="stSearch" placeholder="搜索编号，如 BW01 / 2E10" value="${ea(stationQuery)}" style="max-width:230px;padding:6px 8px" oninput="onStationSearch(this.value)">
+      <button class="ghost mini" onclick="fillAllZero('${ea(n)}')">✔ 全部标记无异常（填 0）</button>
+      <button class="ghost mini" onclick="clearSheet('${ea(n)}')">清空本表</button>
+      <span class="note">点格子循环切换：· → 0 → 1</span></div>`;
+  let shown=0;
+  gs.forEach(G=>{
+    const ids=q?G.ids.filter(x=>String(x).toUpperCase().indexOf(q)>=0):G.ids;
+    if(!ids.length) return;
+    shown+=ids.length;
+    const cnt=ids.filter(x=>data[x]&&Object.keys(data[x]).length).length;
+    const open=openGroups[n+"_"+G.g]||!!q;
+    h+=`<div class="grp${open?" open":""}" id="grp_${ea(n)}_${ea(G.g)}">
+      <div class="grp-head" onclick="toggleGroup('${ea(n)}','${ea(G.g)}')">
+        <span class="gname">${ea(G.g)}</span>
+        <span class="ginfo">${ids.length} 个点位 · 已填 ${cnt}${q?"（搜索结果）":""}</span>
+        <button class="ghost mini" onclick="event.stopPropagation();fillGroupZero('${ea(n)}','${ea(G.g)}')">本组填 0</button>
+        <span style="color:var(--muted)">${open?"▴":"▾"}</span>
+      </div><div class="grp-body">`;
+    if(open){
+      h+=`<table><thead><tr><th>编号</th>`+def.cols.map(c=>`<th>${ea(c.t)}</th>`).join("")+`</tr></thead><tbody>`;
+      ids.forEach(id=>{
+        const row=data[id]||{};
+        h+=`<tr><td class="sid">${ea(id)}</td>`+def.cols.map(c=>{
+          if(c.type==="01"){
+            const v=row[c.k]; const cls=v==="1"?"v1":v==="0"?"v0":"vE";
+            return `<td><button type="button" class="cellbtn ${cls}" onclick="cycleCell('${ea(n)}','${ea(id)}','${c.k}',this)">${v==="1"?"1":v==="0"?"0":"·"}</button></td>`;
+          }
+          return `<td><input value="${ea(row[c.k])}" oninput="setCell('${ea(n)}','${ea(id)}','${c.k}',this.value)"></td>`;
+        }).join("")+`</tr>`;
+      });
+      h+=`</tbody></table>`;
+    }
+    h+=`</div></div>`;
+  });
+  if(!shown) h+=`<div class="empty">没有匹配的编号</div>`;
+  document.getElementById("sheetBody").innerHTML=h;
+}
+function toggleGroup(n,g){ const k=n+"_"+g; openGroups[k]=!openGroups[k]; renderStation(n); }
+function onStationSearch(v){ stationQuery=v; renderStation(activeSheet);
+  const el=document.getElementById("stSearch"); if(el){el.focus();el.setSelectionRange(v.length,v.length);} }
+function setCell(n,id,k,v){
+  const d=R.sheets[n]||(R.sheets[n]={}); const row=d[id]||(d[id]={});
+  if(v==="") delete row[k]; else row[k]=v;
+  if(!Object.keys(row).length) delete d[id];
+  dirty=true; renderProgress();
+}
+function cycleCell(n,id,k,btn){
+  const d=R.sheets[n]||(R.sheets[n]={}); const row=d[id]||(d[id]={});
+  const v=row[k], nv=(v==null||v==="")?"0":(v==="0"?"1":"");
+  if(nv==="") delete row[k]; else row[k]=nv;
+  if(!Object.keys(row).length) delete d[id];
+  btn.textContent=nv===""?"·":nv;
+  btn.className="cellbtn "+(nv==="1"?"v1":nv==="0"?"v0":"vE");
+  dirty=true; renderProgress();
+}
+function fillGroupZero(n,g){
+  const d=R.sheets[n]||(R.sheets[n]={});
+  const ids=(ST[n]||[]).filter(x=>(String(x).match(/^[0-9]?[A-Za-z]+/)||["其他"])[0]===g);
+  ids.forEach(id=>{ const row=d[id]||(d[id]={}); SH[n].cols.filter(c=>c.type==="01").forEach(c=>{ row[c.k]="0"; }); });
+  dirty=true; renderStation(n); renderProgress(); toast(`已把 ${ids.length} 个点位标记为无异常`);
+}
+function fillAllZero(n){
+  if(!confirm(`把「${SH[n].title}」全部 ${(ST[n]||[]).length} 个点位标记为无异常（0）？\n只会填数值格，文字格保留。`)) return;
+  const d=R.sheets[n]||(R.sheets[n]={});
+  (ST[n]||[]).forEach(id=>{ const row=d[id]||(d[id]={}); SH[n].cols.filter(c=>c.type==="01").forEach(c=>{ row[c.k]="0"; }); });
+  dirty=true; renderStation(n); renderProgress(); toast("已全部标记无异常");
+}
+function clearSheet(n){
+  if(!confirm(`清空「${SH[n].title}」的所有填写内容？`)) return;
+  R.sheets[n]={}; dirty=true; renderStation(n); renderProgress();
+}
+
+/* ---- 自由行表 ---- */
+function renderFree(n){
+  const def=SH[n], rows=R.sheets[n]||(R.sheets[n]=[]);
+  const show=Math.min(def.rows,Math.max(3,rows.length+1));
+  let h=`<h3>${ea(def.title)} <span class="note">（最多 ${def.rows} 行）</span></h3><div class="scroll"><table><thead><tr>`+
+    def.cols.map(c=>`<th>${ea(c.t)}</th>`).join("")+`<th style="width:34px">—</th></tr></thead><tbody>`;
+  for(let i=0;i<show;i++){
+    const row=rows[i]||{};
+    h+=`<tr>`+def.cols.map(c=>`<td><input type="${c.type==="date"?"date":"text"}" value="${ea(row[c.k])}" oninput="setFree('${ea(n)}',${i},'${c.k}',this.value)"></td>`).join("")+
+       `<td><button class="ghost mini" onclick="clearFreeRow('${ea(n)}',${i})">×</button></td></tr>`;
+  }
+  h+=`</tbody></table></div><div class="btn-row">
+    <button class="ghost mini" onclick="addFreeRow('${ea(n)}')">＋ 添加一行</button>
+    ${n==="消杀记录"?`<button class="ghost mini" onclick="importDayRecords('消杀记录')">↧ 从当天消杀记录带入</button>`:""}
+    ${n==="物料进出厂清单"?`<button class="ghost mini" onclick="importDayMaterials()">↧ 从当天用药带入</button>`:""}
+    <button class="ghost mini" onclick="clearFree('${ea(n)}')">清空本表</button></div>`;
+  document.getElementById("sheetBody").innerHTML=h;
+}
+function setFree(n,i,k,v){ const rows=R.sheets[n]||(R.sheets[n]=[]); while(rows.length<=i)rows.push({});
+  if(v==="") delete rows[i][k]; else rows[i][k]=v; dirty=true; }
+function addFreeRow(n){ const rows=R.sheets[n]||(R.sheets[n]=[]); if(rows.length>=SH[n].rows){toast("已达最大行数");return;}
+  rows.push({}); dirty=true; renderFree(n); }
+function clearFreeRow(n,i){ const rows=R.sheets[n]||[]; if(rows[i])rows[i]={}; dirty=true; renderFree(n); }
+function clearFree(n){ if(!confirm(`清空「${SH[n].title}」的所有内容？`))return; R.sheets[n]=[]; dirty=true; renderFree(n); }
+function dayRecords(){ const d=R.date||todayStr(); return ((state&&state.records)||[]).filter(r=>r.date===d); }
+function recFactories(r){ return r.factories||(r.factory?[r.factory]:[]); }
+function importDayRecords(n){
+  const recs=dayRecords(); if(!recs.length){ toast("当天没有已录入的消杀记录"); return; }
+  if(n==="消杀记录"){
+    const rows=R.sheets["消杀记录"]||(R.sheets["消杀记录"]=[]); let add=0;
+    recs.forEach(r=>{ (r.drugs||[]).forEach(d=>{
+      if(rows.length>=SH["消杀记录"].rows) return;
+      const dil=Array.isArray(d.ratio&&d.ratio.dilution)?d.ratio.dilution.join("、"):(d.ratio&&d.ratio.dilution)||"";
+      const meth=(d.ratio&&d.ratio.method)||"";
+      rows.push({date:r.date,place:[r.zone,...recFactories(r)].filter(Boolean).join(" "),drug:d.name||"",
+        target:(d.targets||[]).join("、"),method:r.method||"",regNo:"",ratio:[dil,meth].filter(Boolean).join(" / "),
+        operator:"",note:r.note||""}); add++;
+    }); });
+    dirty=true; renderFree("消杀记录"); toast(`已带入 ${add} 行`);
+  }else{
+    const mats=R.sheets.SR.materials; let add=0;
+    recs.forEach(r=>(r.drugs||[]).forEach(d=>{
+      if(add>=SH.SR.materialRows) return;
+      const dil=Array.isArray(d.ratio&&d.ratio.dilution)?d.ratio.dilution.join("、"):(d.ratio&&d.ratio.dilution)||"";
+      mats[add]={m0:d.name||"",m1:"",m2:(d.targets||[]).join("、"),m3:"",
+        m4:[r.zone,...recFactories(r)].filter(Boolean).join(" "),m5:(d.ratio&&d.ratio.method)||"",
+        m6:dil,m7:d.used||""}; add++;
+    }));
+    dirty=true; renderSR(); toast(`已带入 ${add} 行到主表物料使用记录`);
+  }
+}
+function importDayMaterials(){
+  const recs=dayRecords(); if(!recs.length){ toast("当天没有已录入的消杀记录"); return; }
+  const rows=R.sheets["物料进出厂清单"]||(R.sheets["物料进出厂清单"]=[]); let add=0;
+  recs.forEach(r=>(r.drugs||[]).forEach(d=>{
+    if(rows.length>=SH["物料进出厂清单"].rows) return;
+    rows.push({name:d.name||"",bringIn:d.bringIn||"",used:d.used||"",waste:d.waste||"",
+      remain:d.remain||"",note:[d.spec?"规格 "+d.spec:"",r.note||""].filter(Boolean).join("；")}); add++;
+  }));
+  dirty=true; renderFree("物料进出厂清单"); toast(`已带入 ${add} 行`);
+}
+
+/* ===== 签名画板 ===== */
+function initPad(id){
+  const cv=document.getElementById(id); if(!cv) return;
+  const ctx=cv.getContext("2d"); ctx.lineWidth=3; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#111";
+  let drawing=false,last=null;
+  function pos(e){ const r=cv.getBoundingClientRect(), t=e.touches?e.touches[0]:e;
+    return {x:(t.clientX-r.left)*cv.width/r.width,y:(t.clientY-r.top)*cv.height/r.height}; }
+  cv.addEventListener("pointerdown",e=>{ drawing=true; last=pos(e); e.preventDefault(); });
+  cv.addEventListener("pointermove",e=>{ if(!drawing)return; const p=pos(e);
+    ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; e.preventDefault(); });
+  ["pointerup","pointerleave","pointercancel"].forEach(ev=>cv.addEventListener(ev,()=>{drawing=false;last=null;}));
+}
+function clearPad(id){ const cv=document.getElementById(id); if(cv) cv.getContext("2d").clearRect(0,0,cv.width,cv.height); }
+function padBlank(id){ const cv=document.getElementById(id); if(!cv)return true;
+  const d=cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data;
+  for(let i=3;i<d.length;i+=4) if(d[i]>0) return false; return true; }
+async function submitProviderSign(){
+  if(!R){ toast("请先新建或选择报告"); return; }
+  const name=(document.getElementById("pName").value||"").trim();
+  if(!name){ toast("请填写服务商负责人姓名"); return; }
+  if(padBlank("padP")){ toast("请先在画板里签名"); return; }
+  const okSave=await saveReport(true); if(!okSave) return;
+  const img=document.getElementById("padP").toDataURL("image/png");
+  const payload={date:R.date,provider:{name,img,ts:new Date().toLocaleString("zh-CN")}};
+  try{
+    const r=await fetch(API("/api/confirm"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){ toast("签名提交失败："+(j.msg||r.status)); return; }
+    const s=await fetch(API("/api/state"),{cache:"no-store"}); state=await s.json();
+    confirmations=state.confirmations||{};
+    const got=(confirmations[R.date]||{}).provider;
+    if(!got||got.name!==name){ toast("⚠ 云端未确认到签名，请重试"); return; }
+    clearPad("padP"); document.getElementById("pName").value="";
+    renderSignStatus(); toast("✓ 服务商签名已提交，等待我司补签");
+  }catch(e){ toast("网络异常，签名未提交"); }
+}
+
+/* ===== 启动 ===== */
+async function boot(){
+  await checkBuild();
+  document.getElementById("buildId").textContent=PAGE_BUILD;
+  initPad("padP");
+  try{ await loadAll(); }catch(e){ toast("连接后台失败，请检查网络"); }
+  // 打开即空白：不自动回填历史报告；要续填旧报告请从上方下拉选择
+  R={date:todayStr(),client:DEF_CLIENT,sheets:emptySheets(),progress:0};
+  activeSheet="SR"; dirty=false;
+  renderReportSel(); renderAll();
+}
+window.addEventListener("beforeunload",e=>{ if(dirty){ e.preventDefault(); e.returnValue=""; } });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden&&dirty&&R) saveReport(true); });
+boot();
+</script>
+</body>
+</html>

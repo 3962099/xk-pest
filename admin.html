@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>虫控消杀 · 管理后台</title>
 <script src="/xlsx.full.min.js"></script>
+<script src="/stations.js"></script>
 <style>
   :root{
     --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
@@ -48,18 +49,25 @@
   tr.rec{cursor:pointer}
   tr.rec:hover{background:#f0f7f0}
   .tip{color:var(--muted);font-size:12px;margin:0 0 8px}
-  #detail{position:fixed;inset:0;background:rgba(20,40,20,.5);display:none;align-items:flex-start;justify-content:center;z-index:60;overflow:auto;padding:20px}
-  #detail .box{background:#fff;border-radius:14px;max-width:780px;width:100%;padding:18px;margin:auto}
-  #detail .close{float:right;background:#fff}
-  #detail h2{margin:0 0 2px;font-size:18px;color:var(--green-d)}
-  #detail .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
-  #detail h3{margin:12px 0 4px;font-size:15px;color:var(--green-d)}
-  #detail .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin-bottom:6px}
-  #detail .kv b{color:var(--muted);font-weight:500;white-space:nowrap}
-  #detail table{font-size:13px}
-  #detail .sigs{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
-  #detail .sig{flex:1;min-width:240px}
-  #detail .sig img{max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .viewtabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .viewtab{padding:9px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--muted);font-size:14px}
+  .viewtab.active{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
+  .rep-sec{border:1px solid var(--line);border-radius:9px;padding:10px;margin:8px 0;overflow:auto}
+  .rep-sec h4{margin:0 0 6px;font-size:14px;color:var(--green-d)}
+  .rep-sec .mini-note{color:var(--muted);font-size:12px;margin-bottom:6px}
+  #reportDetail .box{max-width:920px}
+  #detail,#reportDetail{position:fixed;inset:0;background:rgba(20,40,20,.5);display:none;align-items:flex-start;justify-content:center;z-index:60;overflow:auto;padding:20px}
+  #detail .box,#reportDetail .box{background:#fff;border-radius:14px;max-width:780px;width:100%;padding:18px;margin:auto}
+  #detail .close,#reportDetail .close{float:right;background:#fff}
+  #detail h2,#reportDetail h2{margin:0 0 2px;font-size:18px;color:var(--green-d)}
+  #detail .sub,#reportDetail .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
+  #detail h3,#reportDetail h3{margin:12px 0 4px;font-size:15px;color:var(--green-d)}
+  #detail .kv,#reportDetail .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin-bottom:6px}
+  #detail .kv b,#reportDetail .kv b{color:var(--muted);font-weight:500;white-space:nowrap}
+  #detail table,#reportDetail table{font-size:13px}
+  #detail .sigs,#reportDetail .sigs{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+  #detail .sig,#reportDetail .sig{flex:1;min-width:240px}
+  #detail .sig img,#reportDetail .sig img{max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
 </style>
 </head>
 <body>
@@ -77,6 +85,7 @@
 <header>
   <h1>🐞 虫控消杀 · 管理后台</h1>
   <div class="btns">
+    <a href="/report" style="color:#fff;background:rgba(255,255,255,.16);padding:9px 12px;border-radius:8px;text-decoration:none;font-size:14px">📝 现场服务报告录入</a>
     <button class="ghost" id="refreshBtn" onclick="load(true)">🔄 刷新云端数据</button>
     <button class="pri" onclick="exportExcel()">⬇ 导出 Excel</button>
     <button class="ghost" onclick="printRecordsFiltered()">🖨 批量导出 PDF</button>
@@ -86,15 +95,33 @@
 </header>
 
 <main>
-  <div class="toolbar">
-    <select id="dateSel" onchange="render()"><option value="">全部日期</option></select>
-    <input type="search" id="kw" placeholder="搜索：区域 / 范围 / 方式 / 药品 / 备注" oninput="render()">
+  <div class="viewtabs">
+    <button class="viewtab active" id="vtRecords" onclick="switchView('records')">消杀记录</button>
+    <button class="viewtab" id="vtReports" onclick="switchView('reports')">现场服务报告 <span id="reportCount"></span></button>
   </div>
-  <p class="tip">💡 点击表格中任意一行，可查看该条记录的完整详情（药品明细 + 双方签名）</p>
-  <div class="stat" id="stat"></div>
-  <div class="card"><div id="tbl"></div></div>
-  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-09-23-1715 · 构建 <span id="buildId">__BUILD__</span></div>
+
+  <div id="viewRecords">
+    <div class="toolbar">
+      <select id="dateSel" onchange="render()"><option value="">全部日期</option></select>
+      <input type="search" id="kw" placeholder="搜索：区域 / 范围 / 方式 / 药品 / 备注" oninput="render()">
+    </div>
+    <p class="tip">💡 点击表格中任意一行，可查看该条记录的完整详情（药品明细 + 双方签名）</p>
+    <div class="stat" id="stat"></div>
+    <div class="card"><div id="tbl"></div></div>
+  </div>
+
+  <div id="viewReports" style="display:none">
+    <p class="tip">服务商在「现场服务报告录入」页填完并签名后，在这里查看内容、我方补签、导出 9 张表。</p>
+    <div class="card"><div id="reportTbl"></div></div>
+  </div>
+
+  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-11-05-1100 · 构建 <span id="buildId">__BUILD__</span></div>
 </main>
+
+<div id="reportDetail"><div class="box">
+  <button class="close" onclick="closeReportDetail()">✕ 关闭</button>
+  <div id="reportDetailBody"></div>
+</div></div>
 
 <div id="detail"><div class="box">
   <button class="close" onclick="closeDetail()">✕ 关闭</button>
@@ -104,6 +131,10 @@
 <script>
 /* ===== 数据 ===== */
 let records=[], confirmations={}, drugs=[], providerName="能多洁";
+let reports=[], currentReport=null;
+const ST=(window.XK_STATIONS||{}), SH=(window.XK_SHEETS||{}), ORDER=(window.XK_SHEET_ORDER||[]);
+const CHECK=["E","H","G","F-1","F-2"];
+const TOTAL_STATIONS=CHECK.reduce((a,k)=>a+((ST[k]||[]).length),0);
 
 /* ===== 工具 ===== */
 function esc(s){ return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
@@ -192,7 +223,8 @@ async function load(showToast){
     const s=await r.json();
     providerName=s.provider||"能多洁";
     records=s.records||[]; confirmations=s.confirmations||{}; drugs=s.drugs||[];
-    render();
+    reports=s.reports||[];
+    render(); renderReports();
     if(showToast) toast("已刷新云端数据");
   }catch(e){ toast("刷新失败："+e.message); }
   finally{ if(btn){ btn.disabled=false; btn.textContent="🔄 刷新云端数据"; } }
@@ -482,6 +514,194 @@ async function deleteRecord(id){
     closeDetail();
     await load(false);
     toast("已删除该条记录");
+  }catch(e){ toast("⚠ 删除失败："+e.message); }
+}
+
+/* ===== 现场服务报告：后台查看 / 我方补签 / 导出 9 张表 ===== */
+function switchView(v){
+  const isR=v==="reports";
+  document.getElementById("viewRecords").style.display=isR?"none":"block";
+  document.getElementById("viewReports").style.display=isR?"block":"none";
+  document.getElementById("vtRecords").classList.toggle("active",!isR);
+  document.getElementById("vtReports").classList.toggle("active",isR);
+}
+function repSignInfo(date){
+  const c=confirmations[date]||{};
+  if(c.confirmed) return {txt:"✓ 双方已签名",cls:"ok",p:c.provider||{},co:c.company||{}};
+  if(c.provider) return {txt:"🟡 服务商已签，待我司签名",cls:"wait",p:c.provider||{},co:c.company||{}};
+  if(c.company) return {txt:"🟡 我司已签，待服务商签名",cls:"wait",p:c.provider||{},co:c.company||{}};
+  return {txt:"⏳ 待签名",cls:"wait",p:{},co:{}};
+}
+function renderReports(){
+  const box=document.getElementById("reportTbl");
+  const cnt=document.getElementById("reportCount");
+  if(cnt) cnt.textContent=reports.length?`(${reports.length})`:"";
+  if(!box) return;
+  if(!reports.length){ box.innerHTML='<div class="empty">还没有现场服务报告。服务商在「现场服务报告录入」页填完并保存后，这里就会出现。</div>'; return; }
+  let h='<table><thead><tr><th>服务日期</th><th>报告</th><th>已填点位</th><th>签名状态</th><th>操作</th></tr></thead><tbody>';
+  reports.forEach(r=>{
+    const si=repSignInfo(r.date);
+    h+=`<tr class="rec" onclick="openReportDetail('${esc(r.id)}')">
+      <td>${esc(r.date)}</td><td>${esc(r.title||"现场服务报告")}</td>
+      <td>${r.progress||0} / ${TOTAL_STATIONS}</td><td class="${si.cls}">${esc(si.txt)}</td>
+      <td><button class="pri" onclick="event.stopPropagation();openReportDetail('${esc(r.id)}')">查看 / 补签</button>
+      <button onclick="event.stopPropagation();exportReportExcel('${esc(r.id)}')">⬇ 9表Excel</button>
+      <button class="danger" onclick="event.stopPropagation();deleteReportById('${esc(r.id)}')">🗑</button></td></tr>`;
+  });
+  box.innerHTML=h+'</tbody></table>';
+}
+async function openReportDetail(id){
+  try{
+    const r=await fetch("/api/reports/"+encodeURIComponent(id),{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    currentReport=await r.json();
+  }catch(e){ toast("读取报告失败："+e.message); return; }
+  renderReportDetail();
+  document.getElementById("reportDetail").style.display="flex";
+}
+function closeReportDetail(){ document.getElementById("reportDetail").style.display="none"; currentReport=null; }
+document.getElementById("reportDetail").addEventListener("click",e=>{ if(e.target.id==="reportDetail") closeReportDetail(); });
+
+function repTable(title,heads,rows,limit){
+  let h=`<div class="rep-sec"><h4>${esc(title)}</h4><div class="mini-note">共 ${rows.length} 行${rows.length>limit?`，这里只显示前 ${limit} 行，完整内容请导出 Excel`:""}</div>`;
+  if(!rows.length){ return h+'<div class="empty" style="padding:10px">（未填写）</div></div>'; }
+  h+='<table><thead><tr>'+heads.map(x=>`<th>${esc(x)}</th>`).join("")+'</tr></thead><tbody>';
+  rows.slice(0,limit).forEach(row=>{ h+='<tr>'+row.map(x=>`<td>${esc(x==null?"":String(x))}</td>`).join("")+'</tr>'; });
+  return h+'</tbody></table></div>';
+}
+function renderReportDetail(){
+  const r=currentReport; if(!r) return;
+  const sh=r.sheets||{}, si=repSignInfo(r.date);
+  let h=`<h2>现场服务报告</h2><div class="sub">${esc(r.date)} · ${esc(r.title||"")} · 最后保存 ${esc(r.updatedAt||"")}</div>`;
+  h+=`<div class="kv"><b>客户名称</b><span>${esc(r.client||"")}</span><b>已填点位</b><span>${r.progress||0} / ${TOTAL_STATIONS}</span><b>签名状态</b><span class="${si.cls}">${esc(si.txt)}</span></div>`;
+  h+='<div class="sigs">';
+  h+=`<div class="sig"><b>服务商签名${si.p.name?"："+esc(si.p.name):""}</b>${si.p.img?`<br><img src="${esc(si.p.img)}">`:"<div class='sub'>（未签名）</div>"}</div>`;
+  h+=`<div class="sig"><b>我司签名${si.co.name?"："+esc(si.co.name):""}</b>${si.co.img?`<br><img src="${esc(si.co.img)}">`:"<div class='sub'>（未签名）</div>"}</div>`;
+  h+='</div>';
+  h+=`<h3>✓ 我司签名确认${si.co.img?"（重新签名会覆盖）":""}</h3>
+    <div style="max-width:260px"><input id="repSignName" placeholder="我司确认人姓名" value="${esc(si.co.name||"")}"></div>
+    <div style="margin:8px 0"><canvas id="repPad" width="600" height="180" style="width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none"></canvas></div>
+    <div class="btns"><button class="ghost" onclick="clearRepPad()">清除签名</button><button class="pri" onclick="signReportCompany()">✓ 我司签名确认</button></div>
+    <p class="tip">签名按服务日期保存，与填单页的双方签名共用同一份记录。</p>`;
+  h+='<h3>报告内容（9 张表）</h3>';
+  const f=(sh.SR&&sh.SR.fields)||{}, mats=(sh.SR&&sh.SR.materials)||[];
+  h+='<div class="rep-sec"><h4>1. 现场服务报告（主表）</h4><table><tbody>';
+  (SH.SR?SH.SR.fields:[]).forEach(fd=>{
+    let v=f[fd.k]; if(v==null||v==="") v=fd.def||""; if(Array.isArray(v)) v=v.join("、");
+    if(v!==""&&v!=null) h+=`<tr><th style="width:210px">${esc(fd.t)}</th><td>${esc(String(v))}</td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  const mh=SH.SR?SH.SR.materialHead:[];
+  h+=repTable("主表 · 物料使用记录",mh,mats.filter(m=>m&&Object.keys(m).length).map((m,i)=>[String(i+1),...mh.map((_,j)=>m["m"+j]||"")]),6);
+  CHECK.forEach((n,i)=>{
+    const d=sh[n]||{}, ids=ST[n]||[];
+    const rows=ids.map(id=>{ const row=d[id]||{}; return [id,...SH[n].cols.map(c=>row[c.k]||"")]; });
+    h+=repTable(`${i+2}. ${SH[n].title}（${ids.length} 个点位）`,["编号",...SH[n].cols.map(c=>c.t)],rows,8);
+  });
+  ["消杀记录","物料进出厂清单","CAPA"].forEach(n=>{
+    const rows=(sh[n]||[]).filter(x=>x&&Object.keys(x).length);
+    h+=repTable(SH[n].title,SH[n].cols.map(c=>c.t),rows.map(x=>SH[n].cols.map(c=>x[c.k]||"")),10);
+  });
+  h+=`<div class="btns" style="margin-top:14px">
+    <button class="pri" onclick="exportReportExcel('${esc(r.id)}')">⬇ 导出 9 张表 Excel</button>
+    <button onclick="printReport()">🖨 打印 / 存 PDF</button>
+    <button class="danger" onclick="deleteReportById('${esc(r.id)}')">🗑 删除本报告</button></div>`;
+  document.getElementById("reportDetailBody").innerHTML=h;
+  bindRepPad();
+}
+function bindRepPad(){
+  const cv=document.getElementById("repPad"); if(!cv) return;
+  const ctx=cv.getContext("2d"); if(!ctx) return;
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  let drawing=false,lx=0,ly=0;
+  const pos=e=>{const b=cv.getBoundingClientRect(),t=e.touches?e.touches[0]:e;
+    return {x:(t.clientX-b.left)*(cv.width/b.width),y:(t.clientY-b.top)*(cv.height/b.height)};};
+  const start=e=>{drawing=true;const p=pos(e);lx=p.x;ly=p.y;e.preventDefault();};
+  const move=e=>{if(!drawing)return;const p=pos(e);ctx.lineWidth=2.4;ctx.lineCap="round";ctx.strokeStyle="#111";
+    ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(p.x,p.y);ctx.stroke();lx=p.x;ly=p.y;e.preventDefault();};
+  const end=()=>{drawing=false;};
+  cv.addEventListener("mousedown",start); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cv.addEventListener("touchstart",start,{passive:false}); cv.addEventListener("touchmove",move,{passive:false});
+  cv.addEventListener("touchend",end);
+}
+function clearRepPad(){ const cv=document.getElementById("repPad"); if(cv){const x=cv.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,cv.width,cv.height);} }
+function repPadEmpty(){
+  const cv=document.getElementById("repPad"); if(!cv) return true;
+  const d=cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data;
+  for(let i=0;i<d.length;i+=4){ if(d[i]<230||d[i+1]<230||d[i+2]<230) return false; }
+  return true;
+}
+async function signReportCompany(){
+  if(!currentReport) return;
+  const name=(document.getElementById("repSignName").value||"").trim();
+  if(!name){ toast("请填写我司确认人姓名"); return; }
+  if(repPadEmpty()){ toast("请先在画板里签名"); return; }
+  const now=new Date().toLocaleString("zh-CN");
+  const part={date:currentReport.date,company:{name,img:document.getElementById("repPad").toDataURL("image/png"),ts:now},companyTs:now};
+  try{
+    const r=await fetch("/api/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(part)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok) throw new Error(j.msg||("HTTP "+r.status));
+    const id=currentReport.id;
+    await load(false);
+    const got=(confirmations[(currentReport||{}).date]||{}).company;
+    if(!got||got.name!==name){ toast("⚠ 云端未确认到签名，请重试"); return; }
+    toast(j.confirmed?"✓ 我司已签名，双方签名完成":"✓ 我司已签名，待服务商签名");
+    openReportDetail(id);
+  }catch(e){ toast("⚠ 签名上传失败："+e.message); }
+}
+function printReport(){
+  const node=document.getElementById("reportDetailBody").cloneNode(true);
+  node.querySelectorAll("button,canvas,input,.sigs").forEach(x=>x.remove());
+  const w=window.open("","_blank");
+  if(!w){ toast("请允许弹出窗口后重试"); return; }
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>现场服务报告</title><style>'+
+    'body{font-family:-apple-system,"PingFang SC",sans-serif;padding:16px;font-size:12px}'+
+    'h2{font-size:18px}h3,h4{font-size:14px;margin:10px 0 4px}table{border-collapse:collapse;width:100%;margin-bottom:8px}'+
+    'th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}.rep-sec{page-break-inside:avoid;margin-bottom:10px}'+
+    '</style></head><body>'+node.innerHTML+'</body></html>');
+  w.document.close();
+  setTimeout(()=>w.print(),300);
+}
+async function exportReportExcel(id){
+  let r=(currentReport&&currentReport.id===id)?currentReport:null;
+  if(!r){
+    try{ const resp=await fetch("/api/reports/"+encodeURIComponent(id)); r=await resp.json(); }
+    catch(e){ toast("读取报告失败"); return; }
+  }
+  if(typeof XLSX==="undefined"){ toast("Excel 组件未加载，请刷新后重试"); return; }
+  const sh=r.sheets||{}, wb=XLSX.utils.book_new(), mh=SH.SR?SH.SR.materialHead:[];
+  const srAoa=[["广州旺旺食品有限公司现场服务报告"],["项目","内容"]];
+  (SH.SR?SH.SR.fields:[]).forEach(fd=>{
+    let v=(sh.SR&&sh.SR.fields)?sh.SR.fields[fd.k]:null;
+    if(v==null||v==="") v=fd.def||""; if(Array.isArray(v)) v=v.join("、");
+    srAoa.push([fd.t,String(v)]);
+  });
+  srAoa.push([]); srAoa.push(["物料使用记录"]); srAoa.push(mh);
+  ((sh.SR&&sh.SR.materials)||[]).forEach(m=>srAoa.push(mh.map((_,j)=>(m&&m["m"+j])||"")));
+  const c=confirmations[r.date]||{};
+  srAoa.push([]);
+  srAoa.push(["服务商签名",(c.provider||{}).name||"",(c.provider||{}).ts||""]);
+  srAoa.push(["我司签名",(c.company||{}).name||"",(c.company||{}).ts||""]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(srAoa),"SR");
+  CHECK.forEach(n=>{
+    const d=sh[n]||{}, rows=[["编号",...SH[n].cols.map(c=>c.t)]];
+    (ST[n]||[]).forEach(id=>{ const row=d[id]||{}; rows.push([id,...SH[n].cols.map(c=>row[c.k]||"")]); });
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),n);
+  });
+  ["消杀记录","物料进出厂清单","CAPA"].forEach(n=>{
+    const rows=[SH[n].cols.map(c=>c.t),...(sh[n]||[]).filter(x=>x&&Object.keys(x).length).map(x=>SH[n].cols.map(c=>x[c.k]||""))];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),n);
+  });
+  XLSX.writeFile(wb,"现场服务报告_"+r.date+".xlsx");
+  toast("已导出 9 张表 Excel");
+}
+async function deleteReportById(id){
+  if(!confirm("确定删除这份现场服务报告？删除后无法恢复。")) return;
+  try{
+    const r=await fetch("/api/reports/"+encodeURIComponent(id),{method:"DELETE"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    closeReportDetail(); await load(false); toast("已删除报告");
   }catch(e){ toast("⚠ 删除失败："+e.message); }
 }
 
