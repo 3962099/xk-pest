@@ -27,6 +27,7 @@
     font-size:15px;background:#fff;color:var(--txt)}
   textarea{resize:vertical}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .fixed-val{background:#f2f4f7;border:1px solid #e3e8ef;border-radius:8px;padding:8px 10px;white-space:pre-wrap;color:#334;line-height:1.5;margin-top:2px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:10px 15px;
     background:var(--green);color:#fff;font-weight:600}
@@ -166,7 +167,7 @@
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12px;padding:8px 0 20px">
-    页面版本 v2026-11-05-1440 · 构建 <span id="buildId">__BUILD__</span>
+    页面版本 v2026-11-05-1500 · 构建 <span id="buildId">__BUILD__</span>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -215,6 +216,8 @@ function normalize(r){
   if(!r.sheets.SR.materials) r.sheets.SR.materials=[];
   r.date = r.date || todayStr();
   r.client = r.client || DEF_CLIENT;
+  // 固定字段（客户名称/地址）强制回默认值，确保不被改动
+  (SH.SR.fields||[]).forEach(fd=>{ if(fd.fixed){ r.sheets.SR.fields[fd.k]=fd.def; } });
 }
 function groups(name){
   const out = [], map = {};
@@ -257,7 +260,7 @@ async function openReport(id){
 }
 async function newReport(){
   await saveIfDirty();
-  R={date:todayStr(),client:DEF_CLIENT,sheets:emptySheets(),progress:0};
+  R={date:todayStr(),client:DEF_CLIENT,sheets:emptySheets(),progress:0}; normalize(R);
   activeSheet="SR"; stationQuery=""; openGroups={}; dirty=true;
   showEditor(); toast("已新建空白报告");
 }
@@ -382,6 +385,10 @@ function renderSR(){
   let h=`<h3>基本信息</h3><div class="grid2">`;
   def.fields.forEach(fd=>{
     const v=f[fd.k]!=null?f[fd.k]:(fd.def||"");
+    if(fd.fixed){
+      h+=`<div${fd.t.length>14?' style="grid-column:1/-1"':''}><label>${ea(fd.t)}</label><div class="fixed-val">${ea(fd.def!=null?fd.def:v)}</div></div>`;
+      return;
+    }
     if(fd.type==="multi"){
       const on=Array.isArray(v)?v:[];
       h+=`<div style="grid-column:1/-1"><label>${ea(fd.t)}</label><div id="sr_${fd.k}">`+
