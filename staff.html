@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>现场人员管理 · 服务商录入</title>
+<style>
+  :root{ --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
+    --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.5;font-size:15px}
+  header{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;padding:12px 16px;
+    position:sticky;top:0;z-index:20}
+  header h1{margin:0;font-size:17px}
+  header .nav{display:flex;gap:14px;margin-top:6px;font-size:13px}
+  header .nav a{color:#e8f5e9;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.4)}
+  .wrap{max-width:1000px;margin:0 auto;padding:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .card h2{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card h2 .sp{flex:1}
+  label{display:block;font-size:13px;color:var(--muted);margin:9px 0 4px}
+  input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;
+    font-size:15px;background:#fff;color:var(--txt)}
+  button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:10px 15px;
+    background:var(--green);color:#fff;font-weight:600}
+  button.ghost{background:#fff;color:var(--green);border:1px solid var(--green);font-weight:400}
+  button.danger{background:#fff;color:var(--red);border:1px solid var(--red);font-weight:400}
+  button.mini{font-size:12px;padding:5px 9px;font-weight:400}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .note{font-size:12px;color:var(--muted)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap}
+  .pill.ok{background:#e8f5e9;color:var(--green)}
+  .pill.warn{background:#fff3e0;color:var(--amber)}
+  .pill.bad{background:#ffebee;color:var(--red)}
+  .warnbox{border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px;display:none}
+  .warnbox.show{display:block}
+  .warnbox.bad{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c}
+  .warnbox.warn{background:#fff3e0;border:1px solid #ffcc80;color:#e65100}
+  .worker{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff}
+  .worker .info{flex:1;min-width:140px}
+  .worker .name{font-weight:600;font-size:15px}
+  .worker .meta{font-size:12px;color:var(--muted)}
+  .thumb{width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+  .photo-pick{display:flex;gap:10px;align-items:center;margin-bottom:4px;flex-wrap:wrap}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:50;
+    align-items:flex-start;justify-content:center;padding:20px;overflow:auto}
+  .modal.show{display:flex}
+  .modal .box{background:#fff;border-radius:12px;padding:16px;max-width:720px;width:100%}
+  .modal img{width:100%;border:1px solid var(--line);border-radius:8px;margin:6px 0}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
+    background:#333;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;
+    transition:.25s;z-index:99;opacity:0;max-width:90vw}
+  .toast.show{transform:translateX(-50%);opacity:1}
+  .empty{color:var(--muted);text-align:center;padding:18px;font-size:14px}
+  @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>👷 现场人员管理 · 服务商录入</h1>
+  <div class="nav"><a href="/">← 平台首页</a><a href="/report">现场报告</a><a href="/admin">管理后台</a></div>
+</header>
+<div class="wrap">
+
+  <div class="warnbox" id="warnBox"></div>
+
+  <div class="card">
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增现场人员</span></h2>
+    <div class="grid2" style="max-width:640px">
+      <div><label>姓名 *</label><input id="wName" placeholder="如 张三" maxlength="20"></div>
+      <div><label>岗位 / 工种（选填）</label><input id="wPost" placeholder="如 灭鼠员 / 施工员" maxlength="30"></div>
+    </div>
+    <div style="max-width:320px"><label>健康证有效期至 *</label>
+      <input type="date" id="wExpiry">
+      <div class="note">新办默认一年有效；到期前 30 天页面会自动提醒更换</div>
+    </div>
+    <h3>证件上传（拍照或从相册选择）</h3>
+    <div class="photo-pick">
+      <div>
+        <label>上岗证</label>
+        <input type="file" id="upFile" accept="image/*" style="display:none" onchange="pickPhoto('certUp',this)">
+        <img id="prev_certUp" class="thumb" style="display:none" onclick="pickPhoto('certUp',document.getElementById('upFile'))" alt="">
+        <button class="ghost mini" onclick="document.getElementById('upFile').click()">📷 上传上岗证</button>
+        <button class="danger mini" id="clear_certUp" style="display:none" onclick="clearPhoto('certUp')">✕ 清除</button>
+      </div>
+      <div>
+        <label>健康证</label>
+        <input type="file" id="healthFile" accept="image/*" style="display:none" onchange="pickPhoto('certHealth',this)">
+        <img id="prev_certHealth" class="thumb" style="display:none" onclick="pickPhoto('certHealth',document.getElementById('healthFile'))" alt="">
+        <button class="ghost mini" onclick="document.getElementById('healthFile').click()">📷 上传健康证</button>
+        <button class="danger mini" id="clear_certHealth" style="display:none" onclick="clearPhoto('certHealth')">✕ 清除</button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="saveBtn" onclick="saveWorker()">💾 保存人员</button>
+      <button class="ghost" id="cancelBtn" style="display:none" onclick="clearForm()">取消编辑</button>
+      <span class="note" id="saveHint"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px">人员列表</span>
+      <span class="sp"></span>
+      <button class="ghost mini" onclick="loadAll(true)">🔄 刷新</button></h2>
+    <div id="workerList"></div>
+  </div>
+</div>
+
+<!-- 查看证件弹窗 -->
+<div class="modal" id="certModal" onclick="if(event.target===this)closeModal()">
+  <div class="box">
+    <h2 id="certModalTitle" style="margin-top:0">证件查看</h2>
+    <div id="certModalBody"></div>
+    <div class="btn-row"><button class="ghost" onclick="closeModal()">关闭</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PAGE_BUILD = "__BUILD__";
+let workers = [], draft = {id:null, name:"", post:"", healthExpiry:"", certUp:null, certHealth:null};
+
+function ea(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function addYears(dateStr, n){ const d=new Date(dateStr||todayStr()); d.setFullYear(d.getFullYear()+n); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show");
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove("show"),2600); }
+
+async function checkBuild(){
+  if(!PAGE_BUILD || PAGE_BUILD.indexOf("__")===0) return false;
+  try{
+    const r = await fetch("/api/version", {cache:"no-store"});
+    const j = await r.json();
+    if(j && j.build && j.build !== PAGE_BUILD){
+      const key = "xk_reload_" + j.build;
+      if(!sessionStorage.getItem(key)){ sessionStorage.setItem(key,"1"); location.reload(); return true; }
+    }
+  }catch(e){}
+  return false;
+}
+
+function healthState(expiry){
+  if(!expiry) return {cls:"warn", txt:"未填有效期", days:null};
+  const d = Math.floor((new Date(expiry+"T23:59:59") - new Date()) / 86400000);
+  if(d < 0)  return {cls:"bad", txt:"已过期 "+(-d)+" 天", days:d};
+  if(d <= 30) return {cls:"warn", txt:"⚠ "+d+" 天后到期", days:d};
+  return {cls:"ok", txt:"✓ 有效至 "+expiry, days:d};
+}
+
+/* ===== 数据 ===== */
+async function loadAll(loud){
+  try{
+    const r = await fetch("/api/state", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const s = await r.json();
+    workers = s.workers || [];
+    renderWarn(); renderList();
+    if(loud) toast("✓ 已刷新");
+  }catch(e){ toast("连接后台失败，请检查网络"); }
+}
+function renderWarn(){
+  const box = document.getElementById("warnBox");
+  const items = [];
+  workers.forEach(w=>{
+    const st = healthState(w.healthExpiry);
+    if(st.days !== null && st.days <= 30)
+      items.push(`<div>🪪 <strong>${ea(w.name)}</strong>（${ea(w.post||"现场人员")}）健康证${st.days<0?"已过期 "+(-st.days)+" 天":"将在 "+st.days+" 天后到期（"+ea(w.healthExpiry)+"）"}，请及时更新并重新上传。</div>`);
+  });
+  if(!items.length){ box.className="warnbox"; box.innerHTML=""; return; }
+  const hasExpired = workers.some(w=>{const s=healthState(w.healthExpiry);return s.days!==null&&s.days<0;});
+  box.className = "warnbox show " + (hasExpired ? "bad" : "warn");
+  box.innerHTML = "<div style='font-weight:600;margin-bottom:4px'>🔔 健康证到期提醒</div>" + items.join("");
+}
+function renderList(){
+  const box = document.getElementById("workerList");
+  if(!workers.length){ box.innerHTML='<div class="empty">还没有登记人员。用上方表单添加第一位现场人员。</div>'; return; }
+  box.innerHTML = workers.map(w=>{
+    const st = healthState(w.healthExpiry);
+    return `<div class="worker">
+      <div class="info">
+        <div class="name">${ea(w.name)}${w.post?` <span class="note">· ${ea(w.post)}</span>`:""}</div>
+        <div class="meta">上岗证：${w.hasUpCert?"✓ 已上传":"<span style='color:var(--amber)'>未上传</span>"}　更新：${ea((w.updatedAt||"").slice(0,10))}</div>
+      </div>
+      <span class="pill ${st.cls}">${ea(st.txt)}</span>
+      <div class="btn-row" style="margin-top:0">
+        <button class="ghost mini" onclick="viewCerts('${ea(w.id)}')">👁 查看证件</button>
+        <button class="ghost mini" onclick="editWorker('${ea(w.id)}')">✏ 编辑</button>
+        <button class="danger mini" onclick="deleteWorker('${ea(w.id)}')">🗑 删除</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ===== 表单 ===== */
+function pickPhoto(key, input){
+  const f = input.files && input.files[0];
+  if(!f) return;
+  if(!/^image\//.test(f.type)){ toast("请选择图片文件"); return; }
+  compressFile(f, url=>{
+    draft[key] = url; showPrev(key);
+    input.value = "";
+    toast("图片已压缩，保存时上传");
+  });
+}
+function compressFile(file, cb){
+  const img = new Image();
+  img.onload = ()=>{
+    try{
+      const max = 1200, sc = Math.min(1, max/Math.max(img.width,img.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.max(1,Math.round(img.width*sc)); cv.height = Math.max(1,Math.round(img.height*sc));
+      cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+      cb(cv.toDataURL("image/jpeg",0.72));
+    }catch(e){ toast("图片处理失败，请换一张"); }
+  };
+  img.onerror = ()=>toast("图片读取失败，请换一张");
+  img.src = URL.createObjectURL(file);
+}
+function showPrev(key){
+  const img = document.getElementById("prev_"+key), btn = document.getElementById("clear_"+key);
+  if(draft[key]){ img.src=draft[key]; img.style.display=""; btn.style.display=""; }
+  else { img.style.display="none"; img.removeAttribute("src"); btn.style.display="none"; }
+}
+function clearPhoto(key){ draft[key]=null; showPrev(key); }
+function clearForm(){
+  draft = {id:null, name:"", post:"", healthExpiry:addYears(todayStr(),1), certUp:null, certHealth:null};
+  document.getElementById("wName").value="";
+  document.getElementById("wPost").value="";
+  document.getElementById("wExpiry").value=draft.healthExpiry;
+  showPrev("certUp"); showPrev("certHealth");
+  document.getElementById("formTitle").textContent="＋ 新增现场人员";
+  document.getElementById("saveBtn").textContent="💾 保存人员";
+  document.getElementById("cancelBtn").style.display="none";
+}
+async function saveWorker(){
+  const name = document.getElementById("wName").value.trim();
+  if(!name){ toast("请填写姓名"); return; }
+  const expiry = document.getElementById("wExpiry").value;
+  if(!expiry){ toast("请填写健康证有效期"); return; }
+  draft.name = name;
+  draft.post = document.getElementById("wPost").value.trim();
+  draft.healthExpiry = expiry;
+  const btn = document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="保存中…";
+  try{
+    const r = await fetch("/api/workers", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(draft)});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){ toast("保存失败："+(j.msg||r.status)); return; }
+    toast(draft.id ? "✓ 人员已更新" : "✓ 人员已登记");
+    clearForm();
+    await loadAll();
+  }finally{ btn.disabled=false; btn.textContent="💾 保存人员"; }
+}
+async function editWorker(id){
+  try{
+    const r = await fetch("/api/workers/"+encodeURIComponent(id), {cache:"no-store"});
+    if(!r.ok){ toast("读取人员失败"); return; }
+    const w = await r.json();
+    draft = {id:w.id, name:w.name, post:w.post||"", healthExpiry:w.healthExpiry||"", certUp:w.certUp||null, certHealth:w.certHealth||null};
+    document.getElementById("wName").value=draft.name;
+    document.getElementById("wPost").value=draft.post;
+    document.getElementById("wExpiry").value=draft.healthExpiry;
+    showPrev("certUp"); showPrev("certHealth");
+    document.getElementById("formTitle").textContent="✏ 编辑："+w.name;
+    document.getElementById("cancelBtn").style.display="";
+    window.scrollTo({top:0,behavior:"smooth"});
+  }catch(e){ toast("连接后台失败"); }
+}
+async function deleteWorker(id){
+  if(!confirm("确定删除该人员？其证件将一并删除。")) return;
+  const r = await fetch("/api/workers/"+encodeURIComponent(id), {method:"DELETE"});
+  if(!r.ok){ toast("删除失败"); return; }
+  await loadAll(); toast("已删除");
+}
+async function viewCerts(id){
+  try{
+    const r = await fetch("/api/workers/"+encodeURIComponent(id), {cache:"no-store"});
+    if(!r.ok){ toast("读取人员失败"); return; }
+    const w = await r.json();
+    document.getElementById("certModalTitle").textContent = "证件查看 · "+w.name+(w.post?"（"+w.post+"）":"");
+    document.getElementById("certModalBody").innerHTML =
+      `<div><label>上岗证 ${w.certUp?"":"（未上传）"}</label>${w.certUp?`<img src="${w.certUp}" alt="上岗证">`:""}</div>`+
+      `<div><label>健康证（有效期至 ${ea(w.healthExpiry||"—")}）${w.certHealth?"":"（未上传）"}</label>${w.certHealth?`<img src="${w.certHealth}" alt="健康证">`:""}</div>`;
+    document.getElementById("certModal").classList.add("show");
+  }catch(e){ toast("连接后台失败"); }
+}
+function closeModal(){ document.getElementById("certModal").classList.remove("show"); }
+
+/* init */
+document.getElementById("wExpiry").value = addYears(todayStr(),1);
+checkBuild(); loadAll();
+</script>
+</body>
+</html>

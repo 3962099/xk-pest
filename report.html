@@ -167,7 +167,7 @@
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12px;padding:8px 0 20px">
-    页面版本 v2026-11-05-1500 · 构建 <span id="buildId">__BUILD__</span>
+    页面版本 v2026-11-05-1600 · 构建 <span id="buildId">__BUILD__</span>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -406,16 +406,22 @@ function renderSR(){
   });
   h+=`</div>`;
   h+=`<h3>物料使用记录（主表）</h3><div class="scroll"><table><thead><tr><th style="min-width:50px">行</th>`+
-    def.materialHead.map(x=>`<th>${ea(x)}</th>`).join("")+`</tr></thead><tbody>`;
-  for(let i=0;i<def.materialRows;i++){
-    const row=mats[i]||{};
+    def.materialHead.map(x=>`<th>${ea(x)}</th>`).join("")+`<th style="min-width:44px">删除</th></tr></thead><tbody>`;
+  const rows = mats.length ? mats : [{}];
+  for(let i=0;i<rows.length;i++){
+    const row=rows[i]||{};
     h+=`<tr><td class="sid">${i+1}</td>`+def.materialHead.map((_,j)=>
-      `<td><input value="${ea(row['m'+j])}" oninput="setMat(${i},${j},this.value)"></td>`).join("")+`</tr>`;
+      `<td><input value="${ea(row['m'+j])}" oninput="setMat(${i},${j},this.value)"></td>`).join("")+
+      `<td style="text-align:center"><button type="button" class="ghost mini" title="删除本行" onclick="delMaterialRow(${i})">🗑</button></td></tr>`;
   }
   h+=`</tbody></table></div>`;
-  h+=`<div class="btn-row"><button class="ghost mini" onclick="importDayRecords('SR')">↧ 从当天消杀记录带入</button></div>`;
+  h+=`<div class="btn-row"><button class="ghost mini" onclick="addMaterialRow()">＋ 新增一行物料</button>`+
+     `<button class="ghost mini" onclick="importDayRecords('SR')">↧ 从当天消杀记录带入</button>`+
+     `<span class="note" style="color:var(--muted);font-size:12px">按实际用量增行，空白行导出时自动忽略</span></div>`;
   document.getElementById("sheetBody").innerHTML=h;
 }
+function addMaterialRow(){ const m=R.sheets.SR.materials; m.push({}); dirty=true; renderSR(); }
+function delMaterialRow(i){ const m=R.sheets.SR.materials; m.splice(i,1); dirty=true; renderSR(); }
 function setSRVal(k,v){ R.sheets.SR.fields[k]=v; dirty=true; if(k==="date"){R.date=v;document.getElementById("rDate").value=v;} }
 function setSR(k,v,box){ R.sheets.SR.fields[k]=v; dirty=true;
   [...box.children].forEach(c=>c.classList.remove("on","redon"));

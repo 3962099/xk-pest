@@ -59,6 +59,8 @@ def ensure():
     k.execute(adapt("CREATE TABLE IF NOT EXISTS drugs(id TEXT PRIMARY KEY, data TEXT)"))
     # 现场服务报告：一份报告 = 主表 SR + 9 张子表，整份以 JSON 保存（点位多但只存填过的行）
     k.execute(adapt("CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY, date TEXT, data TEXT, created_at TEXT, updated_at TEXT)"))
+    # 现场人员：姓名/岗位/上岗证/健康证（证件图为压缩后 base64 存 JSON）
+    k.execute(adapt("CREATE TABLE IF NOT EXISTS workers(id TEXT PRIMARY KEY, data TEXT, created_at TEXT, updated_at TEXT)"))
     c.commit(); c.close()
 
 def get_meta(kk, d=None):
@@ -79,6 +81,13 @@ def report_summary(r):
             "client": r.get("client", ""), "progress": r.get("progress", 0),
             "createdAt": r.get("createdAt", ""), "updatedAt": r.get("updatedAt", "")}
 
+def worker_summary(w):
+    """人员列表摘要：不带证件图片（base64 大），查看证件单独拉详情"""
+    return {"id": w.get("id"), "name": w.get("name", ""), "post": w.get("post", ""),
+            "healthExpiry": w.get("healthExpiry", ""),
+            "hasUpCert": bool(w.get("certUp")), "hasHealthCert": bool(w.get("certHealth")),
+            "createdAt": w.get("createdAt", ""), "updatedAt": w.get("updatedAt", "")}
+
 def read_state():
     c = conn(); k = cur(c)
     k.execute(adapt("SELECT data FROM records ORDER BY created_at"))
@@ -89,9 +98,11 @@ def read_state():
     cdr = [json.loads(r[0]) for r in k.fetchall()]
     k.execute(adapt("SELECT data FROM reports ORDER BY created_at DESC"))
     crep = [report_summary(json.loads(r[0])) for r in k.fetchall()]
+    k.execute(adapt("SELECT data FROM workers ORDER BY created_at"))
+    cwk = [worker_summary(json.loads(r[0])) for r in k.fetchall()]
     c.close()
     return {"provider": get_meta("provider", "能多洁"), "records": crecs,
-            "confirmations": conf, "drugs": cdr, "reports": crep}
+            "confirmations": conf, "drugs": cdr, "reports": crep, "workers": cwk}
 
 # 构建标识：取 index.html 的修改时间，每次部署都会变。
 # 用途：页面里内嵌这个值，前端发现「自己带的版本」与「服务器当前版本」不一致时自动刷新一次，
@@ -99,7 +110,7 @@ def read_state():
 def _build_id():
     try:
         newest = 0
-        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py", "portal.html"):
+        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py", "portal.html", "staff.html"):
             p = os.path.join(BASE, fn)
             if os.path.exists(p):
                 newest = max(newest, int(os.path.getmtime(p)))
@@ -152,6 +163,11 @@ def report_page():
 @app.route("/admin.html")
 def admin_page():
     return _serve_page("admin.html")
+
+@app.route("/staff")
+@app.route("/staff.html")
+def staff_page():
+    return _serve_page("staff.html")
 
 @app.route("/api/version")
 def api_version():
@@ -342,12 +358,72 @@ def delete_report(rid):
     c.commit(); c.close()
     return jsonify({"ok": True})
 
+# ===== 现场人员：姓名/岗位/上岗证/健康证（证件图为 base64） =====
+def list_workers():
+    c = conn(); k = cur(c)
+    k.execute(adapt("SELECT data FROM workers ORDER BY created_at"))
+    rows = [json.loads(r[0]) for r in k.fetchall()]; c.close()
+    return rows
+
+@app.route("/api/workers", methods=["GET"])
+def get_workers():
+    return jsonify([worker_summary(w) for w in list_workers()])
+
+@app.route("/api/workers", methods=["POST"])
+def save_worker():
+    try:
+        w = request.get_json(force=True)
+    except Exception:
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    if not isinstance(w, dict):
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    name = (w.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "msg": "姓名不能为空"}), 400
+    # 重名拦截（同一人不重复建档）
+    for ex in list_workers():
+        if ex.get("id") != w.get("id") and ex.get("name", "").strip() == name:
+            return jsonify({"ok": False, "msg": "该姓名已存在，请直接编辑原人员"}), 400
+    # 证件图大小限制（压缩后 base64，约 800KB 上限，防误传大文件）
+    for key in ("certUp", "certHealth"):
+        v = w.get(key)
+        if v and isinstance(v, str) and len(v) > 1200 * 1024:
+            return jsonify({"ok": False, "msg": "证件图片过大，请用手机拍照重试"}), 400
+    wid = w.get("id") or ("W" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + os.urandom(2).hex())
+    w["id"] = wid; w["name"] = name
+    now = _now()
+    w.setdefault("createdAt", now)
+    w["updatedAt"] = now
+    payload = json.dumps(w, ensure_ascii=False)
+    c = conn(); k = cur(c)
+    k.execute(adapt("INSERT INTO workers(id,data,created_at,updated_at) VALUES(?,?,?,?) "
+                    "ON CONFLICT(id) DO UPDATE SET data=?, updated_at=?"),
+              (wid, payload, w["createdAt"], now, payload, now))
+    c.commit(); c.close()
+    return jsonify({"ok": True, "id": wid, "worker": worker_summary(w)})
+
+@app.route("/api/workers/<wid>", methods=["GET"])
+def get_worker(wid):
+    c = conn(); k = cur(c)
+    k.execute(adapt("SELECT data FROM workers WHERE id=?"), (wid,))
+    row = k.fetchone(); c.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "人员不存在"}), 404
+    return jsonify(json.loads(row[0]))
+
+@app.route("/api/workers/<wid>", methods=["DELETE"])
+def delete_worker(wid):
+    c = conn(); k = cur(c)
+    k.execute(adapt("DELETE FROM workers WHERE id=?"), (wid,))
+    c.commit(); c.close()
+    return jsonify({"ok": True})
+
 # 清空全部数据（管理用，需谨慎）
 @app.route("/api/state", methods=["DELETE"])
 def reset_state():
     c = conn(); k = cur(c)
     k.execute(adapt("DELETE FROM records")); k.execute(adapt("DELETE FROM confirmations"))
-    k.execute(adapt("DELETE FROM reports"))
+    k.execute(adapt("DELETE FROM reports")); k.execute(adapt("DELETE FROM workers"))
     c.commit(); c.close()
     return jsonify({"ok": True})
 

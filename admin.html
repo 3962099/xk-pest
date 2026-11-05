@@ -35,6 +35,7 @@
   th{background:#eef3ee;position:sticky;top:0}
   .ok{color:var(--green);font-weight:600}
   .wait{color:var(--amber);font-weight:600}
+  .bad{color:var(--red);font-weight:600}
   .empty{text-align:center;color:var(--muted);padding:30px}
   /* 密码门 */
   #lock{position:fixed;inset:0;background:rgba(20,40,20,.55);display:flex;align-items:center;justify-content:center;z-index:50}
@@ -98,6 +99,7 @@
   <div class="viewtabs">
     <button class="viewtab active" id="vtRecords" onclick="switchView('records')">消杀记录</button>
     <button class="viewtab" id="vtReports" onclick="switchView('reports')">现场服务报告 <span id="reportCount"></span></button>
+    <button class="viewtab" id="vtWorkers" onclick="switchView('workers')">现场人员 <span id="workerCount"></span></button>
   </div>
 
   <div id="viewRecords">
@@ -115,7 +117,12 @@
     <div class="card"><div id="reportTbl"></div></div>
   </div>
 
-  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-11-05-1200 · 构建 <span id="buildId">__BUILD__</span></div>
+  <div id="viewWorkers" style="display:none">
+    <p class="tip">服务商在「现场人员」页登记并上传上岗证 / 健康证。健康证一年有效，到期前 30 天平台自动提醒服务商更换。点击「查看证件」可看原图。</p>
+    <div class="card"><div id="workerTbl"></div></div>
+  </div>
+
+  <div style="text-align:center;color:var(--muted);font-size:12px;padding:12px 0 4px">页面版本 v2026-11-05-1600 · 构建 <span id="buildId">__BUILD__</span></div>
 </main>
 
 <div id="reportDetail"><div class="box">
@@ -132,6 +139,7 @@
 /* ===== 数据 ===== */
 let records=[], confirmations={}, drugs=[], providerName="能多洁";
 let reports=[], currentReport=null;
+let workers=[];
 const ST=(window.XK_STATIONS||{}), SH=(window.XK_SHEETS||{}), ORDER=(window.XK_SHEET_ORDER||[]);
 const CHECK=["E","H","G","F-1","F-2"];
 const TOTAL_STATIONS=CHECK.reduce((a,k)=>a+((ST[k]||[]).length),0);
@@ -224,7 +232,8 @@ async function load(showToast){
     providerName=s.provider||"能多洁";
     records=s.records||[]; confirmations=s.confirmations||{}; drugs=s.drugs||[];
     reports=s.reports||[];
-    render(); renderReports();
+    workers=s.workers||[];
+    render(); renderReports(); renderWorkers();
     if(showToast) toast("已刷新云端数据");
   }catch(e){ toast("刷新失败："+e.message); }
   finally{ if(btn){ btn.disabled=false; btn.textContent="🔄 刷新云端数据"; } }
@@ -519,11 +528,59 @@ async function deleteRecord(id){
 
 /* ===== 现场服务报告：后台查看 / 我方补签 / 导出 9 张表 ===== */
 function switchView(v){
-  const isR=v==="reports";
-  document.getElementById("viewRecords").style.display=isR?"none":"block";
-  document.getElementById("viewReports").style.display=isR?"block":"none";
-  document.getElementById("vtRecords").classList.toggle("active",!isR);
-  document.getElementById("vtReports").classList.toggle("active",isR);
+  document.getElementById("viewRecords").style.display=v==="records"?"block":"none";
+  document.getElementById("viewReports").style.display=v==="reports"?"block":"none";
+  document.getElementById("viewWorkers").style.display=v==="workers"?"block":"none";
+  document.getElementById("vtRecords").classList.toggle("active",v==="records");
+  document.getElementById("vtReports").classList.toggle("active",v==="reports");
+  document.getElementById("vtWorkers").classList.toggle("active",v==="workers");
+}
+/* ===== 现场人员：后台查看 / 证件查看 / 删除 ===== */
+function workerHealth(expiry){
+  if(!expiry) return {cls:"wait",txt:"未填有效期"};
+  const d=Math.floor((new Date(expiry+"T23:59:59")-new Date())/86400000);
+  if(d<0) return {cls:"bad",txt:"已过期 "+(-d)+" 天"};
+  if(d<=30) return {cls:"bad",txt:"⚠ "+d+" 天后到期"};
+  return {cls:"ok",txt:"✓ 有效至 "+expiry};
+}
+function renderWorkers(){
+  const box=document.getElementById("workerTbl");
+  const cnt=document.getElementById("workerCount");
+  if(cnt) cnt.textContent=workers.length?`(${workers.length})`:"";
+  if(!box) return;
+  if(!workers.length){ box.innerHTML='<div class="empty">还没有登记人员。服务商在「现场人员」页登记后，这里就会出现。</div>'; return; }
+  let h='<table><thead><tr><th>姓名</th><th>岗位</th><th>健康证状态</th><th>上岗证</th><th>更新时间</th><th>操作</th></tr></thead><tbody>';
+  workers.forEach(w=>{
+    const st=workerHealth(w.healthExpiry);
+    h+=`<tr><td><strong>${esc(w.name)}</strong></td><td>${esc(w.post||"—")}</td>
+      <td class="${st.cls}">${esc(st.txt)}</td>
+      <td>${w.hasUpCert?"✓ 已上传":'<span style="color:var(--amber)">未上传</span>'}</td>
+      <td>${esc((w.updatedAt||"").slice(0,10))}</td>
+      <td><button class="pri" onclick="openWorkerCerts('${esc(w.id)}')">查看证件</button>
+      <button class="danger" onclick="deleteWorkerById('${esc(w.id)}')">🗑</button></td></tr>`;
+  });
+  box.innerHTML=h+'</tbody></table>';
+}
+async function openWorkerCerts(id){
+  try{
+    const r=await fetch("/api/workers/"+encodeURIComponent(id));
+    if(!r.ok){ toast("读取人员失败"); return; }
+    const w=await r.json();
+    const st=workerHealth(w.healthExpiry);
+    document.getElementById("detailBody").innerHTML=
+      `<h2 style="margin-top:0">现场人员证件 · ${esc(w.name)}</h2>`+
+      `<div class="sub">${esc(w.post||"现场人员")} · 健康证 <span class="${st.cls}">${esc(st.txt)}</span> · 更新 ${esc((w.updatedAt||"").slice(0,10))}</div>`+
+      `<h4>上岗证 ${w.certUp?"":"（未上传）"}</h4>${w.certUp?`<img src="${w.certUp}" style="max-width:100%;border:1px solid var(--line);border-radius:8px">`:""}`+
+      `<h4>健康证 ${w.certHealth?"":"（未上传）"}</h4>${w.certHealth?`<img src="${w.certHealth}" style="max-width:100%;border:1px solid var(--line);border-radius:8px">`:""}`;
+    document.getElementById("detail").style.display="flex";
+  }catch(e){ toast("刷新失败："+e.message); }
+}
+async function deleteWorkerById(id){
+  if(!confirm("确定删除该人员？其证件将一并删除。")) return;
+  const r=await fetch("/api/workers/"+encodeURIComponent(id),{method:"DELETE"});
+  if(!r.ok){ toast("删除失败"); return; }
+  toast("已删除");
+  load(false);
 }
 function repSignInfo(date){
   const c=confirmations[date]||{};
