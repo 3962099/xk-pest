@@ -99,7 +99,7 @@ def read_state():
 def _build_id():
     try:
         newest = 0
-        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py"):
+        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py", "portal.html"):
             p = os.path.join(BASE, fn)
             if os.path.exists(p):
                 newest = max(newest, int(os.path.getmtime(p)))
@@ -122,6 +122,11 @@ def _serve_page(filename):
 
 @app.route("/")
 def index():
+    return _serve_page("portal.html")
+
+@app.route("/daily")
+@app.route("/daily.html")
+def daily_page():
     return _serve_page("index.html")
 
 @app.route("/xlsx.full.min.js")
