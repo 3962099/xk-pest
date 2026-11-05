@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>现场服务报告 · 服务商录入</title>
 <script src="./stations.js"></script>
+<script src="/xlsx.full.min.js"></script>
 <style>
   :root{ --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
     --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00; }
@@ -18,7 +19,8 @@
   header .nav a{color:#e8f5e9;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.4)}
   .wrap{max-width:1000px;margin:0 auto;padding:12px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
-  .card h2{margin:0 0 10px;font-size:16px}
+  .card h2{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card h2 .sp{flex:1}
   h3{font-size:14px;margin:14px 0 8px}
   label{display:block;font-size:13px;color:var(--muted);margin:9px 0 4px}
   input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;
@@ -31,6 +33,7 @@
   button.ghost{background:#fff;color:var(--green);border:1px solid var(--green);font-weight:400}
   button.danger{background:#fff;color:var(--red);border:1px solid var(--red);font-weight:400}
   button.mini{font-size:12px;padding:5px 9px;font-weight:400}
+  button.big{width:100%;font-size:17px;padding:14px;letter-spacing:1px}
   .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
   .sheet-tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;margin-bottom:4px}
   .sheet-tab{flex:0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:18px;
@@ -73,6 +76,17 @@
   .toast.show{opacity:1}
   .empty{color:var(--muted);text-align:center;padding:20px 0;font-size:14px}
   .scroll{overflow-x:auto}
+  /* ===== 报告列表卡片 ===== */
+  .rep-item{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:9px;
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff}
+  .rep-item:hover{border-color:var(--green)}
+  .rep-main{flex:1;min-width:220px;cursor:pointer}
+  .rep-main .t{font-weight:700;font-size:15px}
+  .rep-main .s{font-size:12px;color:var(--muted);margin-top:3px}
+  .rep-acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  details.use{border:1px solid var(--line);border-radius:12px;background:#fff;margin-bottom:12px;padding:10px 14px}
+  details.use summary{cursor:pointer;font-weight:600;font-size:14px}
+  details.use .in{margin-top:8px;font-size:13px;color:var(--txt)}
   @media(max-width:760px){ .grid2,.grid3{grid-template-columns:1fr} .wrap{padding:9px} .card{padding:11px} }
 </style>
 </head>
@@ -83,50 +97,76 @@
 </header>
 <div class="wrap">
 
-  <div class="card">
-    <h2>① 选择报告</h2>
-    <div class="grid2" style="grid-template-columns:1fr auto auto;gap:8px;align-items:end">
-      <div><label>已有报告</label><select id="reportSel" onchange="onSelectReport()"></select></div>
-      <div><button class="ghost" onclick="newReport()">＋ 新建报告</button></div>
-      <div><button class="danger" onclick="deleteReport()">🗑 删除</button></div>
+  <!-- ========== 列表视图（默认） ========== -->
+  <div id="listView">
+    <div class="card" style="padding:12px">
+      <button class="big" onclick="newReport()">＋ 新建现场服务报告</button>
     </div>
-    <div class="bar" style="margin-top:10px">
-      <span>服务日期 <input type="date" id="rDate" style="width:auto;display:inline-block;padding:6px 8px" onchange="onDateChange()"></span>
-      <span id="progressTxt">—</span>
-      <span id="signPill"></span>
-    </div>
-    <div class="note">打开页面一律是空白新报告。要继续填之前保存过的报告，从上方下拉选择即可。</div>
-  </div>
 
-  <div class="card">
-    <h2>② 逐张填写（9 张表）</h2>
-    <div class="sheet-tabs" id="sheetTabs"></div>
-    <div id="sheetBody"></div>
-    <div class="btn-row">
-      <button onclick="saveReport(false)">💾 保存报告</button>
-      <button class="ghost" onclick="prevSheet()">← 上一张</button>
-      <button class="ghost" onclick="nextSheet()">下一张 →</button>
+    <div class="card">
+      <h2><span style="border-left:4px solid var(--green);padding-left:8px">报告列表</span><span class="sp"></span>
+        <button class="ghost mini" onclick="exportAll()">⬇ 一键全部导出</button></h2>
+      <div class="note" style="margin:0 0 10px">每份报告可单独导出 PDF / Excel，或删除。删除为本地操作，不可恢复，请谨慎。</div>
+      <div id="reportList"></div>
     </div>
-    <div class="note">切换表格时会自动保存。未填的点位默认视为「无异常」，导出时会按空白列出。</div>
-  </div>
 
-  <div class="card">
-    <h2>③ 服务商签名</h2>
-    <div id="signStatus" class="bar"></div>
-    <div class="sign-box">
-      <label>服务商负责人姓名</label>
-      <input id="pName" placeholder="请输入姓名" style="max-width:260px">
-      <div style="margin:8px 0"><canvas id="padP" width="600" height="200"></canvas></div>
-      <div class="btn-row">
-        <button class="ghost mini" onclick="clearPad('padP')">清除签名</button>
-        <button onclick="submitProviderSign()">✍ 提交服务商签名</button>
+    <details class="use">
+      <summary>📱 手机微信 / 企业微信 使用入口（点击展开）</summary>
+      <div class="in">
+        手机浏览器（建议 Safari / Chrome，不用企微内置浏览器）打开平台网址 → 顶部选「现场报告」标签即可。
+        填写中切换表格会自动保存；服务商签完名后，我司在【管理后台】对应报告里补签。
       </div>
-      <div class="note">提交后，我司会在管理后台补签；两边签名互不覆盖。</div>
+    </details>
+
+    <div class="card">
+      <h2><span style="border-left:4px solid var(--green);padding-left:8px">导入报告数据</span></h2>
+      <div class="note" style="margin:0 0 8px">收到报告数据文件（.json）后，在此导入即可查看并继续编辑；导入后会作为一份新报告保存，不影响原有数据。</div>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importReportJSON(this)">
+      <button class="ghost" onclick="document.getElementById('importFile').click()">📂 选择 JSON 文件导入</button>
+    </div>
+  </div>
+
+  <!-- ========== 编辑视图 ========== -->
+  <div id="editorView" style="display:none">
+    <div class="card">
+      <div class="btn-row" style="margin-top:0">
+        <button class="ghost" onclick="backToList()">← 返回报告列表</button>
+        <span>服务日期 <input type="date" id="rDate" style="width:auto;display:inline-block;padding:6px 8px" onchange="onDateChange()"></span>
+        <span id="progressTxt">—</span>
+        <span id="signPill"></span>
+      </div>
+      <div class="note">切换表格时会自动保存。未填的点位默认视为「无异常」，导出时会按空白列出。</div>
+    </div>
+
+    <div class="card">
+      <h2>逐张填写（9 张表）</h2>
+      <div class="sheet-tabs" id="sheetTabs"></div>
+      <div id="sheetBody"></div>
+      <div class="btn-row">
+        <button onclick="saveReport(true)">💾 保存报告</button>
+        <button class="ghost" onclick="prevSheet()">← 上一张</button>
+        <button class="ghost" onclick="nextSheet()">下一张 →</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>服务商签名</h2>
+      <div id="signStatus" class="bar"></div>
+      <div class="sign-box">
+        <label>服务商负责人姓名</label>
+        <input id="pName" placeholder="请输入姓名" style="max-width:260px">
+        <div style="margin:8px 0"><canvas id="padP" width="600" height="200"></canvas></div>
+        <div class="btn-row">
+          <button class="ghost mini" onclick="clearPad('padP')">清除签名</button>
+          <button onclick="submitProviderSign()">✍ 提交服务商签名</button>
+        </div>
+        <div class="note">提交后，我司会在管理后台补签；两边签名互不覆盖。</div>
+      </div>
     </div>
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12px;padding:8px 0 20px">
-    页面版本 v2026-11-05-1200 · 构建 <span id="buildId">__BUILD__</span>
+    页面版本 v2026-11-05-1440 · 构建 <span id="buildId">__BUILD__</span>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -135,6 +175,7 @@
 const PAGE_BUILD = "__BUILD__";
 const ST = window.XK_STATIONS || {}, SH = window.XK_SHEETS || {}, ORDER = window.XK_SHEET_ORDER || [];
 const CHECK = ["E","H","G","F-1","F-2"];
+const FREE_SHEETS = ["消杀记录","物料进出厂清单","CAPA"];
 const DEF_CLIENT = "广州旺旺食品有限公司、广州立旺食品有限公司、广州大旺食品有限公司、广州必旺食品有限公司、广州祥旺食品有限公司、广州永旺食品有限公司、广州明旺乳业有限公司";
 
 let reports = [], R = null, activeSheet = "SR", confirmations = {}, state = null;
@@ -162,7 +203,7 @@ async function checkBuild(){
 function emptySheets(){
   const s = {SR:{fields:{},materials:[]}};
   CHECK.forEach(n=>{ s[n]={}; });
-  ["消杀记录","物料进出厂清单","CAPA"].forEach(n=>{ s[n]=[]; });
+  FREE_SHEETS.forEach(n=>{ s[n]=[]; });
   return s;
 }
 function normalize(r){
@@ -184,18 +225,20 @@ function groups(name){
   });
   return out.map(g=>({g,ids:map[g]}));
 }
-function calcProgress(){
+function calcProgress(r){
+  const rr = r||R;
   let filled=0, total=0;
-  CHECK.forEach(n=>{ total += (ST[n]||[]).length; filled += Object.keys((R&&R.sheets&&R.sheets[n])||{}).length; });
+  CHECK.forEach(n=>{ total += (ST[n]||[]).length; filled += Object.keys((rr&&rr.sheets&&rr.sheets[n])||{}).length; });
   return {filled,total};
 }
-function signInfo(){
-  const c = confirmations[R && R.date] || {};
+function signInfoOf(date){
+  const c = confirmations[date] || {};
   if(c.confirmed) return {cls:"ok",txt:"✓ 双方已签名",p:c.provider||{},co:c.company||{}};
   if(c.provider) return {cls:"wait",txt:"🟡 服务商已签，待我司签名",p:c.provider||{},co:c.company||{}};
   if(c.company) return {cls:"wait",txt:"🟡 我司已签，待服务商签名",p:c.provider||{},co:c.company||{}};
   return {cls:"wait",txt:"⏳ 待签名",p:{},co:{}};
 }
+function signInfo(){ return signInfoOf(R && R.date); }
 
 /* ===== 数据存取 ===== */
 async function loadAll(){
@@ -204,35 +247,25 @@ async function loadAll(){
   state = await r.json();
   reports = state.reports || [];
   confirmations = state.confirmations || {};
-  renderReportSel();
 }
-function renderReportSel(){
-  const sel=document.getElementById("reportSel");
-  sel.innerHTML = '<option value="">— 新建 / 未选择 —</option>' +
-    reports.map(x=>`<option value="${ea(x.id)}"${R&&R.id===x.id?" selected":""}>${ea(x.date)} · ${ea(x.title)} · 已填 ${x.progress||0}</option>`).join("");
-}
-async function onSelectReport(){
-  const id=document.getElementById("reportSel").value;
-  if(!id){ return; }
+async function openReport(id){
   await saveIfDirty();
   const r=await fetch(API("/api/reports/"+encodeURIComponent(id)),{cache:"no-store"});
   if(!r.ok){ toast("读取报告失败"); return; }
   R=await r.json(); normalize(R); activeSheet="SR"; stationQuery=""; openGroups={};
-  renderAll(); toast("已打开报告");
+  showEditor(); toast("已打开报告");
 }
 async function newReport(){
   await saveIfDirty();
   R={date:todayStr(),client:DEF_CLIENT,sheets:emptySheets(),progress:0};
   activeSheet="SR"; stationQuery=""; openGroups={}; dirty=true;
-  document.getElementById("reportSel").value="";
-  renderAll(); toast("已新建空白报告");
+  showEditor(); toast("已新建空白报告");
 }
-async function deleteReport(){
-  if(!R||!R.id){ toast("这是尚未保存的新报告"); return; }
-  if(!confirm("确定删除这份报告？删除后无法恢复。")) return;
-  const r=await fetch(API("/api/reports/"+encodeURIComponent(R.id)),{method:"DELETE"});
+async function deleteReportById(id){
+  if(!confirm("确定删除这份现场服务报告？删除后无法恢复。")) return;
+  const r=await fetch(API("/api/reports/"+encodeURIComponent(id)),{method:"DELETE"});
   if(!r.ok){ toast("删除失败"); return; }
-  await loadAll(); R=null; renderAll(); toast("已删除");
+  await loadAll(); renderList(); toast("已删除");
 }
 function onDateChange(){
   if(!R) return;
@@ -249,17 +282,66 @@ async function saveReport(loud){
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok){ toast("保存失败："+(j.msg||r.status)); return false; }
   R.id=j.id; dirty=false;
-  await loadAll(); renderReportSel(); renderProgress();
+  await loadAll(); renderProgress(); renderSignStatus();
   if(loud) toast("✓ 报告已保存");
   return true;
 }
 async function saveIfDirty(){ if(dirty && R) await saveReport(true); }
 
-/* ===== 渲染 ===== */
+/* ===== 视图切换 ===== */
+function showEditor(){
+  document.getElementById("listView").style.display="none";
+  document.getElementById("editorView").style.display="";
+  window.scrollTo({top:0});
+  renderAll();
+}
+async function backToList(){
+  await saveIfDirty();
+  R=null; dirty=false;
+  document.getElementById("editorView").style.display="none";
+  document.getElementById("listView").style.display="";
+  window.scrollTo({top:0});
+  renderList();
+}
+
+/* ===== 列表渲染 ===== */
+function renderList(){
+  const box=document.getElementById("reportList");
+  const sorted=(reports||[]).slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  if(!sorted.length){
+    box.innerHTML='<div class="empty">还没有报告。点上方「＋ 新建现场服务报告」开始第一份。</div>';
+    return;
+  }
+  box.innerHTML=sorted.map(x=>{
+    const p=x.progress||0, s=signInfoOf(x.date);
+    return `<div class="rep-item">
+      <div class="rep-main" onclick="openReport('${ea(x.id)}')">
+        <div class="t">${ea(x.title||("现场服务报告 "+(x.date||"")))}</div>
+        <div class="s">服务日期：${ea(x.date||"—")} · 已填点位 <strong>${p}</strong> / ${(ST.E||[]).length+(ST.H||[]).length+(ST.G||[]).length+(ST["F-1"]||[]).length+(ST["F-2"]||[]).length}</div>
+      </div>
+      <span class="pill ${s.cls}">${ea(s.txt)}</span>
+      <div class="rep-acts">
+        <button class="ghost mini" onclick="openReport('${ea(x.id)}')">✏ 编辑</button>
+        <button class="ghost mini" onclick="printReportById('${ea(x.id)}')">🖨 PDF</button>
+        <button class="ghost mini" onclick="exportReportExcelById('${ea(x.id)}')">📊 Excel</button>
+        <button class="ghost mini" onclick="exportReportJSONById('${ea(x.id)}')">⬇ JSON</button>
+        <button class="danger mini" onclick="deleteReportById('${ea(x.id)}')">🗑 删除</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+async function exportAll(){
+  if(!reports.length){ toast("还没有可导出的报告"); return; }
+  if(typeof XLSX==="undefined"){ toast("Excel 组件未加载，请刷新后重试"); return; }
+  toast("开始导出 "+reports.length+" 份报告 Excel…");
+  const sorted=reports.slice().sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
+  for(const x of sorted){ await exportReportExcelById(x.id); await new Promise(res=>setTimeout(res,500)); }
+  toast("✓ 全部报告已导出");
+}
+
+/* ===== 渲染（编辑视图） ===== */
 function renderAll(){
-  if(!R){ document.getElementById("sheetBody").innerHTML='<div class="empty">请点「＋ 新建报告」开始，或从上方选择已有报告</div>';
-    document.getElementById("sheetTabs").innerHTML=""; document.getElementById("signPill").innerHTML="";
-    document.getElementById("progressTxt").textContent="—"; return; }
+  if(!R) return;
   document.getElementById("rDate").value=R.date||todayStr();
   renderTabs(); renderProgress(); renderSignStatus(); renderSheet();
 }
@@ -476,6 +558,115 @@ function importDayMaterials(){
   dirty=true; renderFree("物料进出厂清单"); toast(`已带入 ${add} 行`);
 }
 
+/* ===== 导出：PDF / Excel / JSON ===== */
+async function fetchReport(id){
+  if(R && R.id===id) return R;
+  const resp=await fetch(API("/api/reports/"+encodeURIComponent(id)),{cache:"no-store"});
+  if(!resp.ok) throw new Error("HTTP "+resp.status);
+  const r=await resp.json(); normalize(r); return r;
+}
+function buildReportPrintHTML(r){
+  const sh=r.sheets||{}, mh=SH.SR.materialHead;
+  let h=`<h2>广州旺旺食品有限公司现场服务报告</h2>`;
+  h+=`<table>`+(SH.SR.fields.map(fd=>{
+    let v=(sh.SR&&sh.SR.fields)?sh.SR.fields[fd.k]:null;
+    if(v==null||v==="") v=fd.def||""; if(Array.isArray(v)) v=v.join("、");
+    return `<tr><th style="width:38%">${ea(fd.t)}</th><td>${ea(v)}</td></tr>`;
+  }).join(""))+`</table>`;
+  h+=`<h3>物料使用记录</h3><table><tr>${mh.map(x=>`<th>${ea(x)}</th>`).join("")}</tr>`+
+    ((sh.SR&&sh.SR.materials)||[]).filter(m=>m&&Object.keys(m).length).map(m=>
+      `<tr>${mh.map((_,j)=>`<td>${ea(m["m"+j]||"")}</td>`).join("")}</tr>`).join("")+`</table>`;
+  CHECK.forEach(n=>{
+    const d=sh[n]||{};
+    h+=`<h3>${ea(SH[n].title)}</h3><table><tr><th>编号</th>${SH[n].cols.map(c=>`<th>${ea(c.t)}</th>`).join("")}</tr>`+
+      (ST[n]||[]).map(id=>{ const row=d[id]||{};
+        return `<tr><td>${ea(id)}</td>`+SH[n].cols.map(c=>`<td>${ea(row[c.k]||"")}</td>`).join("")+`</tr>`; }).join("")+
+      `</table>`;
+  });
+  FREE_SHEETS.forEach(n=>{
+    const rows=(sh[n]||[]).filter(x=>x&&Object.keys(x).length);
+    h+=`<h3>${ea(SH[n].title)}</h3><table><tr>${SH[n].cols.map(c=>`<th>${ea(c.t)}</th>`).join("")}</tr>`+
+      rows.map(x=>`<tr>${SH[n].cols.map(c=>`<td>${ea(x[c.k]||"")}</td>`).join("")}</tr>`).join("")+`</table>`;
+  });
+  const c=confirmations[r.date]||{};
+  h+=`<h3>签名确认</h3><table>
+    <tr><th style="width:38%">服务商签名</th><td>${ea((c.provider||{}).name||"")}　${ea((c.provider||{}).ts||"")}</td></tr>
+    <tr><th>我司签名</th><td>${ea((c.company||{}).name||"")}　${ea((c.company||{}).ts||"")}</td></tr></table>`;
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>现场服务报告</title><style>'+
+    'body{font-family:-apple-system,"PingFang SC",sans-serif;padding:16px;font-size:12px}'+
+    'h2{font-size:18px}h3,h4{font-size:14px;margin:10px 0 4px}table{border-collapse:collapse;width:100%;margin-bottom:8px}'+
+    'th,td{border:1px solid #ccc;padding:4px 6px;text-align:left}'+
+    '</style></head><body>'+h+'</body></html>';
+}
+async function printReportById(id){
+  let r;
+  try{ r=await fetchReport(id); }catch(e){ toast("读取报告失败"); return; }
+  const w=window.open("","_blank");
+  if(!w){ toast("请允许弹出窗口后重试"); return; }
+  w.document.write(buildReportPrintHTML(r));
+  w.document.close();
+  setTimeout(()=>w.print(),300);
+}
+async function exportReportExcelById(id){
+  let r;
+  try{ r=await fetchReport(id); }catch(e){ toast("读取报告失败"); return; }
+  if(typeof XLSX==="undefined"){ toast("Excel 组件未加载，请刷新后重试"); return; }
+  const sh=r.sheets||{}, wb=XLSX.utils.book_new(), mh=SH.SR.materialHead;
+  const srAoa=[["广州旺旺食品有限公司现场服务报告"],["项目","内容"]];
+  (SH.SR.fields||[]).forEach(fd=>{
+    let v=(sh.SR&&sh.SR.fields)?sh.SR.fields[fd.k]:null;
+    if(v==null||v==="") v=fd.def||""; if(Array.isArray(v)) v=v.join("、");
+    srAoa.push([fd.t,String(v)]);
+  });
+  srAoa.push([]); srAoa.push(["物料使用记录"]); srAoa.push(mh);
+  ((sh.SR&&sh.SR.materials)||[]).forEach(m=>srAoa.push(mh.map((_,j)=>(m&&m["m"+j])||"")));
+  const c=confirmations[r.date]||{};
+  srAoa.push([]);
+  srAoa.push(["服务商签名",(c.provider||{}).name||"",(c.provider||{}).ts||""]);
+  srAoa.push(["我司签名",(c.company||{}).name||"",(c.company||{}).ts||""]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(srAoa),"SR");
+  CHECK.forEach(n=>{
+    const d=sh[n]||{}, rows=[["编号",...SH[n].cols.map(c=>c.t)]];
+    (ST[n]||[]).forEach(id2=>{ const row=d[id2]||{}; rows.push([id2,...SH[n].cols.map(c=>row[c.k]||"")]); });
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),n);
+  });
+  FREE_SHEETS.forEach(n=>{
+    const rows=[SH[n].cols.map(c=>c.t),...(sh[n]||[]).filter(x=>x&&Object.keys(x).length).map(x=>SH[n].cols.map(c=>x[c.k]||""))];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),n);
+  });
+  XLSX.writeFile(wb,"现场服务报告_"+r.date+".xlsx");
+  toast("已导出 9 张表 Excel");
+}
+async function exportReportJSONById(id){
+  let r;
+  try{ r=await fetchReport(id); }catch(e){ toast("读取报告失败"); return; }
+  const blob=new Blob([JSON.stringify(r,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="现场服务报告_"+r.date+".json";
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  toast("已导出报告 JSON");
+}
+function importReportJSON(input){
+  const f=input.files&&input.files[0];
+  if(!f) return;
+  const reader=new FileReader();
+  reader.onload=async ()=>{
+    let data;
+    try{ data=JSON.parse(reader.result); }catch(e){ toast("文件不是有效的 JSON"); input.value=""; return; }
+    if(!data||!data.sheets){ toast("这不是报告数据文件"); input.value=""; return; }
+    delete data.id; // 导入一律另存为新报告，不覆盖原有数据
+    normalize(data);
+    const r=await fetch(API("/api/reports"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){ toast("导入失败："+(j.msg||r.status)); input.value=""; return; }
+    await loadAll(); renderList();
+    toast("✓ 已导入为新报告（服务日期 "+data.date+"）");
+    input.value="";
+  };
+  reader.readAsText(f);
+}
+
 /* ===== 签名画板 ===== */
 function initPad(id){
   const cv=document.getElementById(id); if(!cv) return;
@@ -519,10 +710,9 @@ async function boot(){
   document.getElementById("buildId").textContent=PAGE_BUILD;
   initPad("padP");
   try{ await loadAll(); }catch(e){ toast("连接后台失败，请检查网络"); }
-  // 打开即空白：不自动回填历史报告；要续填旧报告请从上方下拉选择
-  R={date:todayStr(),client:DEF_CLIENT,sheets:emptySheets(),progress:0};
-  activeSheet="SR"; dirty=false;
-  renderReportSel(); renderAll();
+  // 打开即报告列表（列表导向结构）；点「新建」或某份报告才进入填写视图
+  R=null; dirty=false;
+  renderList();
 }
 window.addEventListener("beforeunload",e=>{ if(dirty){ e.preventDefault(); e.returnValue=""; } });
 document.addEventListener("visibilitychange",()=>{ if(document.hidden&&dirty&&R) saveReport(true); });
