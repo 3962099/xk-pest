@@ -289,7 +289,12 @@ function closeModal(){ document.getElementById("certModal").classList.remove("sh
 
 /* init */
 document.getElementById("wExpiry").value = addYears(todayStr(),1);
+const _bid=document.getElementById("buildId"); if(_bid) _bid.textContent=PAGE_BUILD;
 checkBuild(); loadAll();
+</script>
+<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-05-1600 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
+</body>
+</html>
 </script>
 </body>
 </html>
