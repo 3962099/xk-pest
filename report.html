@@ -62,11 +62,13 @@
   th{background:#f0f4f0;font-weight:600;position:sticky;top:0}
   td input{padding:5px;font-size:13px;min-width:90px;border:1px solid #eee;border-radius:5px}
   td.sid{font-weight:600;background:#fafbfa;min-width:64px}
-  .cellbtn{width:28px;height:28px;padding:0;font-size:13px;font-weight:600;border-radius:6px;
-    background:#fff;color:#9aa39a;border:1px solid var(--line)}
-  .cellbtn.v0{background:#e6f4ea;color:var(--green-d);border-color:#a5d6a7}
-  .cellbtn.v1{background:#fdecec;color:var(--red);border-color:#ef9a9a}
-  .cellbtn.vE{background:#fff;color:#bbb}
+  td input.cellnum{width:46px;min-width:0;height:30px;padding:2px 4px;font-size:13px;font-weight:600;
+    text-align:center;border:1px solid var(--line);border-radius:6px;background:#fff;color:#9aa39a}
+  td input.cellnum::placeholder{color:#c8cec8}
+  td input.cellnum:focus{outline:2px solid var(--green);outline-offset:0;border-color:var(--green)}
+  td input.cellnum.v0{background:#e6f4ea;color:var(--green-d);border-color:#a5d6a7}
+  td input.cellnum.v1{background:#fdecec;color:var(--red);border-color:#ef9a9a}
+  td input.cellnum.vE{background:#fff;color:#bbb}
   .sign-box{border:1px dashed var(--line);border-radius:10px;padding:12px;margin-top:10px;background:#fafbfa}
   canvas{border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;height:200px;
     display:block;touch-action:none}
@@ -167,7 +169,7 @@
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12px;padding:8px 0 20px">
-    页面版本 v2026-11-05-1600 · 构建 <span id="buildId">__BUILD__</span>
+    页面版本 v2026-11-06-1400 · 构建 <span id="buildId">__BUILD__</span>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -440,7 +442,7 @@ function renderStation(n){
       <input id="stSearch" placeholder="搜索编号，如 BW01 / 2E10" value="${ea(stationQuery)}" style="max-width:230px;padding:6px 8px" oninput="onStationSearch(this.value)">
       <button class="ghost mini" onclick="fillAllZero('${ea(n)}')">✔ 全部标记无异常（填 0）</button>
       <button class="ghost mini" onclick="clearSheet('${ea(n)}')">清空本表</button>
-      <span class="note">点格子循环切换：· → 0 → 1</span></div>`;
+      <span class="note">数量格直接输入数字：0 = 无异常，1 及以上 = 实际数量</span></div>`;
   let shown=0;
   gs.forEach(G=>{
     const ids=q?G.ids.filter(x=>String(x).toUpperCase().indexOf(q)>=0):G.ids;
@@ -461,8 +463,9 @@ function renderStation(n){
         const row=data[id]||{};
         h+=`<tr><td class="sid">${ea(id)}</td>`+def.cols.map(c=>{
           if(c.type==="01"){
-            const v=row[c.k]; const cls=v==="1"?"v1":v==="0"?"v0":"vE";
-            return `<td><button type="button" class="cellbtn ${cls}" onclick="cycleCell('${ea(n)}','${ea(id)}','${c.k}',this)">${v==="1"?"1":v==="0"?"0":"·"}</button></td>`;
+            const v=(row[c.k]==null?"":String(row[c.k])).trim();
+            const cls=v===""?"vE":(/^\d+$/.test(v)&&Number(v)===0)?"v0":"v1";
+            return `<td><input class="cellnum ${cls}" type="text" inputmode="numeric" maxlength="5" value="${ea(v)}" placeholder="·" title="${ea(c.t)}：填 0 表示无异常，其他填实际数量" oninput="setNumCell('${ea(n)}','${ea(id)}','${c.k}',this)"></td>`;
           }
           return `<td><input value="${ea(row[c.k])}" oninput="setCell('${ea(n)}','${ea(id)}','${c.k}',this.value)"></td>`;
         }).join("")+`</tr>`;
@@ -483,13 +486,14 @@ function setCell(n,id,k,v){
   if(!Object.keys(row).length) delete d[id];
   dirty=true; renderProgress();
 }
-function cycleCell(n,id,k,btn){
+function setNumCell(n,id,k,el){
+  let v=(el.value||"").replace(/[^\d]/g,"");
+  if(v!==el.value) el.value=v;                 // 只留数字，粘贴的杂字符自动清掉
   const d=R.sheets[n]||(R.sheets[n]={}); const row=d[id]||(d[id]={});
-  const v=row[k], nv=(v==null||v==="")?"0":(v==="0"?"1":"");
-  if(nv==="") delete row[k]; else row[k]=nv;
+  if(v==="") delete row[k]; else row[k]=v;
   if(!Object.keys(row).length) delete d[id];
-  btn.textContent=nv===""?"·":nv;
-  btn.className="cellbtn "+(nv==="1"?"v1":nv==="0"?"v0":"vE");
+  el.classList.remove("v0","v1","vE");
+  el.classList.add(v===""?"vE":(Number(v)===0?"v0":"v1"));
   dirty=true; renderProgress();
 }
 function fillGroupZero(n,g){
