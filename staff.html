@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>现场人员管理 · 服务商录入</title>
+<title>现场人员管理</title>
 <style>
   :root{ --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
     --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00; }
@@ -44,31 +44,61 @@
   .worker .meta{font-size:12px;color:var(--muted)}
   .thumb{width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
   .photo-pick{display:flex;gap:10px;align-items:center;margin-bottom:4px;flex-wrap:wrap}
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:50;
-    align-items:flex-start;justify-content:center;padding:20px;overflow:auto}
-  .modal.show{display:flex}
-  .modal .box{background:#fff;border-radius:12px;padding:16px;max-width:720px;width:100%}
-  .modal img{width:100%;border:1px solid var(--line);border-radius:8px;margin:6px 0}
+  .search{display:flex;gap:8px;margin-bottom:10px}
+  .search input{flex:1}
+  .empty{color:var(--muted);text-align:center;padding:18px;font-size:14px}
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
     background:#333;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;
     transition:.25s;z-index:99;opacity:0;max-width:90vw}
   .toast.show{transform:translateX(-50%);opacity:1}
-  .empty{color:var(--muted);text-align:center;padding:18px;font-size:14px}
-  @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} }
+  .overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);display:none;
+    flex-direction:column;align-items:center;justify-content:center;z-index:200;font-size:15px;color:var(--txt)}
+  .overlay.show{display:flex}
+  .overlay .spin{width:34px;height:34px;border:4px solid var(--line);border-top-color:var(--green);
+    border-radius:50%;animation:sp .9s linear infinite;margin-bottom:14px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;
+    align-items:flex-start;justify-content:center;z-index:150;overflow-y:auto;padding:24px 10px}
+  .modal-mask.show{display:flex}
+  .modal{background:#fff;border-radius:14px;max-width:760px;width:100%;padding:16px;
+    box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .modal h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .modal h2 .sp{flex:1}
+  .modal h3{margin:14px 0 6px;font-size:14px;color:var(--txt)}
+  .modal img{width:100%;border:1px solid var(--line);border-radius:8px;margin:6px 0}
+  @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} .modal{padding:13px} }
 </style>
 </head>
 <body>
-<header>
-  <h1>👷 现场人员管理 · 服务商录入</h1>
-  <div class="nav"><a href="/">← 平台首页</a><a href="/report">现场报告</a><a href="/admin">管理后台</a></div>
-</header>
+  <header>
+    <h1>👷 现场人员管理</h1>
+    <div class="nav"><a href="/">← 平台首页</a><a href="/insecticides">药物清单</a><a href="/report">现场报告</a><a href="/admin">管理后台</a></div>
+  </header>
 <div class="wrap">
 
   <div class="warnbox" id="warnBox"></div>
 
   <div class="card">
-    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增现场人员</span></h2>
-    <div class="grid2" style="max-width:640px">
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px">人员列表</span>
+      <span class="sp"></span>
+      <button class="ghost mini" onclick="loadAll(true)">🔄 刷新</button></h2>
+    <div class="search"><input id="q" placeholder="🔍 搜索：姓名 / 岗位" oninput="renderList()"></div>
+    <div id="workerList"></div>
+  </div>
+
+  <div style="text-align:center;margin:18px 0 10px">
+    <button style="font-size:16px;padding:12px 30px;border-radius:26px" onclick="openModal()">＋ 新增人员</button>
+  </div>
+</div>
+
+<!-- 新增 / 编辑弹窗 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增现场人员</span>
+      <span class="sp"></span>
+      <button class="ghost mini" onclick="closeModal()">✕ 关闭</button>
+    </h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
       <div><label>姓名 *</label><input id="wName" placeholder="如 张三" maxlength="20"></div>
       <div><label>岗位 / 工种（选填）</label><input id="wPost" placeholder="如 灭鼠员 / 施工员" maxlength="30"></div>
     </div>
@@ -97,28 +127,22 @@
     </div>
     <div class="btn-row">
       <button id="saveBtn" onclick="saveWorker()">💾 保存人员</button>
-      <button class="ghost" id="cancelBtn" style="display:none" onclick="clearForm()">取消编辑</button>
+      <button class="ghost" id="cancelBtn" style="display:none" onclick="closeModal()">取消</button>
       <span class="note" id="saveHint"></span>
     </div>
-  </div>
-
-  <div class="card">
-    <h2><span style="border-left:4px solid var(--green);padding-left:8px">人员列表</span>
-      <span class="sp"></span>
-      <button class="ghost mini" onclick="loadAll(true)">🔄 刷新</button></h2>
-    <div id="workerList"></div>
   </div>
 </div>
 
 <!-- 查看证件弹窗 -->
-<div class="modal" id="certModal" onclick="if(event.target===this)closeModal()">
-  <div class="box">
+<div class="modal" id="certModal" style="display:none" onclick="if(event.target===this)closeCertModal()">
+  <div class="modal" style="padding:16px">
     <h2 id="certModalTitle" style="margin-top:0">证件查看</h2>
     <div id="certModalBody"></div>
-    <div class="btn-row"><button class="ghost" onclick="closeModal()">关闭</button></div>
+    <div class="btn-row"><button class="ghost" onclick="closeCertModal()">关闭</button></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="overlay" id="overlay"><div class="spin"></div><div id="overlayMsg">⏳ 正在连接服务器…</div></div>
 
 <script>
 const PAGE_BUILD = "__BUILD__";
@@ -151,23 +175,25 @@ function healthState(expiry){
   return {cls:"ok", txt:"✓ 有效至 "+expiry, days:d};
 }
 
-/* ===== 数据（带冷启动自动重试） ===== */
-async function loadAll(loud){
-  let attempt = 0;
-  async function once(){
-    try{
-      const r = await fetch("/api/state", {cache:"no-store"});
-      if(!r.ok) throw new Error("HTTP "+r.status);
-      const s = await r.json();
-      workers = s.workers || [];
-      renderWarn(); renderList();
-      if(loud) toast("✓ 已刷新");
-    }catch(e){
-      if(attempt < 10){ attempt++; toast("⏳ 服务器启动中，正在重试（"+attempt+"）…"); setTimeout(once, 4500); return; }
-      toast("⚠ 仍无法连接，请下拉刷新或稍后重试（免费服务器偶发休眠）");
-    }
+/* ===== 数据（带冷启动自动重试 + 友好提示） ===== */
+function showOverlay(msg){ const o=document.getElementById("overlay"); if(msg) document.getElementById("overlayMsg").textContent=msg; o.classList.add("show"); }
+function hideOverlay(){ document.getElementById("overlay").classList.remove("show"); }
+async function loadAll(loud){ await loadAllRetry(loud, 0); }
+async function loadAllRetry(loud, attempt){
+  try{
+    if(attempt>0) showOverlay("⏳ 服务器启动中（第 "+attempt+" 次重试）…首次打开稍慢请稍候");
+    const r = await fetch("/api/state", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const s = await r.json();
+    workers = s.workers || [];
+    hideOverlay();
+    renderWarn(); renderList();
+    if(loud) toast("✓ 已刷新");
+  }catch(e){
+    if(attempt < 10){ setTimeout(()=>loadAllRetry(loud, attempt+1), 4500); return; }
+    hideOverlay();
+    toast("⚠ 仍无法连接，请下拉刷新页面或稍后重试（免费服务器偶发休眠）");
   }
-  once();
 }
 function renderWarn(){
   const box = document.getElementById("warnBox");
@@ -184,8 +210,15 @@ function renderWarn(){
 }
 function renderList(){
   const box = document.getElementById("workerList");
-  if(!workers.length){ box.innerHTML='<div class="empty">还没有登记人员。用上方表单添加第一位现场人员。</div>'; return; }
-  box.innerHTML = workers.map(w=>{
+  const q = (document.getElementById("q").value||"").trim().toLowerCase();
+  let list = workers;
+  if(q) list = workers.filter(w=>(w.name||"").toLowerCase().includes(q) || (w.post||"").toLowerCase().includes(q));
+  if(!list.length){
+    box.innerHTML = q ? '<div class="empty">没有匹配的人员，换个关键词试试。</div>'
+                     : '<div class="empty">人员列表还是空的。点下方「＋ 新增人员」添加第一位现场人员。</div>';
+    return;
+  }
+  box.innerHTML = list.map(w=>{
     const st = healthState(w.healthExpiry);
     return `<div class="worker">
       <div class="info">
@@ -202,7 +235,18 @@ function renderList(){
   }).join("");
 }
 
-/* ===== 表单 ===== */
+/* ===== 弹窗（新增 / 编辑共用） ===== */
+function openModal(){
+  clearForm();
+  document.getElementById("modalMask").classList.add("show");
+  document.getElementById("modalMask").scrollTop = 0;
+}
+function closeModal(){
+  clearForm();
+  document.getElementById("modalMask").classList.remove("show");
+}
+
+/* ===== 表单（含图片 / PDF 上传） ===== */
 const PDF_MAX = 8 * 1024 * 1024; // 8MB，防止超大文件拖垮数据库
 function isPdf(data){ return typeof data==="string" && data.slice(0,28).indexOf("application/pdf")>=0; }
 function pickPhoto(key, input){
@@ -285,7 +329,7 @@ async function saveWorker(){
     const j = await r.json().catch(()=>({}));
     if(!r.ok || !j.ok){ toast("保存失败："+(j.msg||r.status)); return; }
     toast(draft.id ? "✓ 人员已更新" : "✓ 人员已登记");
-    clearForm();
+    closeModal();
     await loadAll();
   }finally{ btn.disabled=false; btn.textContent="💾 保存人员"; }
 }
@@ -301,7 +345,8 @@ async function editWorker(id){
     showPrev("certUp"); showPrev("certHealth");
     document.getElementById("formTitle").textContent="✏ 编辑："+w.name;
     document.getElementById("cancelBtn").style.display="";
-    window.scrollTo({top:0,behavior:"smooth"});
+    document.getElementById("modalMask").classList.add("show");
+    document.getElementById("modalMask").scrollTop = 0;
   }catch(e){ toast("连接后台失败"); }
 }
 async function deleteWorker(id){
@@ -310,6 +355,8 @@ async function deleteWorker(id){
   if(!r.ok){ toast("删除失败"); return; }
   await loadAll(); toast("已删除");
 }
+
+/* ===== 查看证件 ===== */
 function certBlock(label, data, extra){
   if(!data) return `<div><label>${label}${extra||""}（未上传）</label></div>`;
   if(isPdf(data)){
@@ -331,13 +378,13 @@ async function viewCerts(id){
     document.getElementById("certModal").classList.add("show");
   }catch(e){ toast("连接后台失败"); }
 }
-function closeModal(){ document.getElementById("certModal").classList.remove("show"); }
+function closeCertModal(){ document.getElementById("certModal").classList.remove("show"); }
 
 /* init */
-document.getElementById("wExpiry").value = addYears(todayStr(),1);
+clearForm();
 const _bid=document.getElementById("buildId"); if(_bid) _bid.textContent=PAGE_BUILD;
 checkBuild(); loadAll();
 </script>
-<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-0900 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
+<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-1100 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
 </body>
 </html>
