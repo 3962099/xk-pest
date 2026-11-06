@@ -60,7 +60,14 @@
   .overlay .spin{width:34px;height:34px;border:4px solid var(--line);border-top-color:var(--green);
     border-radius:50%;animation:sp .9s linear infinite;margin-bottom:14px}
   @keyframes sp{to{transform:rotate(360deg)}}
-  @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} }
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;
+    align-items:flex-start;justify-content:center;z-index:150;overflow-y:auto;padding:24px 10px}
+  .modal-mask.show{display:flex}
+  .modal{background:#fff;border-radius:14px;max-width:760px;width:100%;padding:16px;
+    box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .modal h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .modal h2 .sp{flex:1}
+  @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} .modal{padding:13px} }
 </style>
 </head>
 <body>
@@ -73,13 +80,29 @@
   <div class="warnbox" id="warnBox"></div>
 
   <div class="card">
-    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增药物</span>
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px">清单列表</span>
+      <span class="sp"></span>
+      <button class="ghost mini" onclick="loadAll(true)">🔄 刷新</button></h2>
+    <div class="search"><input id="q" placeholder="🔍 搜索：商品名 / 药品名 / 目标虫害 / 使用场所" oninput="renderList()"></div>
+    <div id="listBox"></div>
+  </div>
+
+  <div style="text-align:center;margin:18px 0 10px">
+    <button style="font-size:16px;padding:12px 30px;border-radius:26px" onclick="openModal()">＋ 新增药品</button>
+  </div>
+</div>
+
+<!-- 新增 / 编辑弹窗 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增药品</span>
       <span class="sp"></span>
       <button class="ghost mini" onclick="startImport()">📄 导入文档</button>
+      <button class="ghost mini" onclick="closeModal()">✕ 关闭</button>
       <input type="file" id="impFile" accept=".pdf,.doc,.docx" style="display:none" onchange="onImportFile(this)">
     </h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
-      <div><label>商品名称 *</label><input id="f_tradeName" placeholder="如 拜灭士" maxlength="60"></div>
+      <div><label>商品名称 *</label><input id="f_tradeName" placeholder="如 拜灭土" maxlength="60"></div>
       <div><label>药品名称</label><input id="f_drugName" placeholder="如 吡虫啉杀饵胶" maxlength="60"></div>
       <div><label>农药登记证</label><input id="f_regCert" placeholder="如 PD20112345" maxlength="40"></div>
       <div><label>有效期限至</label><input type="date" id="f_validUntil">
@@ -96,20 +119,13 @@
     <label>包装规格</label><input id="f_packSpec" placeholder="如 5g/支、500ml/瓶" maxlength="40">
     <div class="btn-row">
       <button id="saveBtn" onclick="saveItem()">💾 保存</button>
-      <button class="ghost" id="cancelBtn" style="display:none" onclick="clearForm()">取消编辑</button>
+      <button class="ghost" id="cancelBtn" style="display:none" onclick="closeModal()">取消</button>
       <span class="note" id="saveHint"></span>
     </div>
-    <div class="note" style="margin-top:8px">📄 导入文档：把农药标签 / 说明书的 PDF 或 Word(.docx) 上传，系统会自动识别并填好下方字段，你核对后点保存即可（旧版 .doc 请先另存为 .docx）。</div>
-  </div>
-
-  <div class="card">
-    <h2><span style="border-left:4px solid var(--green);padding-left:8px">清单列表</span>
-      <span class="sp"></span>
-      <button class="ghost mini" onclick="loadAll(true)">🔄 刷新</button></h2>
-    <div class="search"><input id="q" placeholder="🔍 搜索：商品名 / 药品名 / 目标虫害 / 使用场所" oninput="renderList()"></div>
-    <div id="listBox"></div>
+    <div class="note" style="margin-top:8px">📄 导入文档：把农药标签 / 说明书的 PDF 或 Word(.docx) 上传，系统会自动识别并填好字段，你核对后点保存即可（旧版 .doc 请先另存为 .docx）。</div>
   </div>
 </div>
+
 <div class="toast" id="toast"></div>
 <div class="overlay" id="overlay"><div class="spin"></div><div id="overlayMsg">⏳ 正在连接服务器…</div></div>
 
@@ -153,7 +169,7 @@ async function loadAll(loud){
 }
 async function loadAllRetry(loud, attempt){
   try{
-    if(attempt>0) showOverlay("⏳ 服务器启动中（第 "+attempt+" 次重试）…首次打开稍慢请稍候");
+    if(attempt>0) showOverlay("�� 服务器启动中（第 "+attempt+" 次重试）…首次打开稍慢请稍候");
     const r = await fetch("/api/insecticides", {cache:"no-store"});
     if(!r.ok) throw new Error("HTTP "+r.status);
     items = await r.json();
@@ -165,6 +181,17 @@ async function loadAllRetry(loud, attempt){
     hideOverlay();
     toast("⚠ 仍无法连接，请下拉刷新页面或稍后重试（免费服务器偶发休眠）");
   }
+}
+
+/* ===== 弹窗（新增 / 编辑共用） ===== */
+function openModal(){
+  clearForm();
+  document.getElementById("modalMask").classList.add("show");
+  document.getElementById("modalMask").scrollTop = 0;
+}
+function closeModal(){
+  clearForm();
+  document.getElementById("modalMask").classList.remove("show");
 }
 
 /* ===== 导入文档（PDF / Word） ===== */
@@ -181,12 +208,13 @@ async function onImportFile(input){
     hideOverlay();
     if(!r.ok || !j.ok){ toast("导入失败："+(j.msg||"请确认是文字版 PDF/Word")); return; }
     const f = j.fields || {};
+    document.getElementById("modalMask").classList.add("show");
     FIELDS.forEach(k=>{ const el=document.getElementById("f_"+k); if(el) el.value = f[k]||""; });
     draft = {id:null};
-    document.getElementById("formTitle").textContent="＋ 新增药物（已导入，请核对）";
+    document.getElementById("formTitle").textContent="📄 已从文档识别，请核对后保存";
     document.getElementById("cancelBtn").style.display="none";
     document.getElementById("saveBtn").textContent="💾 保存";
-    window.scrollTo({top:0,behavior:"smooth"});
+    document.getElementById("modalMask").scrollTop = 0;
     toast("✓ 已从文档识别，请核对后点保存");
   }catch(e){ hideOverlay(); toast("连接后台失败，请重试"); }
 }
@@ -212,7 +240,7 @@ function renderList(){
   }
   if(!list.length){
       box.innerHTML = q ? '<div class="empty">没有匹配的条目，换个关键词试试。</div>'
-                      : '<div class="empty">清单还是空的。点右上角「📄 导入文档」或手动添加第一款药物。</div>';
+                      : '<div class="empty">清单还是空的。点下方「＋ 新增药品」添加第一款药物，弹窗里也可以「📄 导入文档」自动识别。</div>';
     return;
   }
   box.innerHTML = list.map(d=>{
@@ -240,15 +268,14 @@ function renderList(){
 /* ===== 表单 ===== */
 function clearForm(){
   draft = {id:null};
-  FIELDS.forEach(k=>{ document.getElementById("f_"+k).value = ""; });
-  document.getElementById("f_validUntil").value = "";
-  document.getElementById("formTitle").textContent="＋ 新增药物";
+  FIELDS.forEach(k=>{ const el=document.getElementById("f_"+k); if(el) el.value = ""; });
+  document.getElementById("formTitle").textContent="＋ 新增药品";
   document.getElementById("saveBtn").textContent="💾 保存";
   document.getElementById("cancelBtn").style.display="none";
 }
 function saveItem(){
   const d = {id: draft.id || null};
-  FIELDS.forEach(k=>{ d[k] = document.getElementById("f_"+k).value.trim(); });
+  FIELDS.forEach(k=>{ const el=document.getElementById("f_"+k); d[k] = el ? el.value.trim() : ""; });
   if(!d.tradeName && !d.drugName){ toast("商品名称与药品名称至少填一项"); return; }
   const btn = document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="保存中…";
   fetch("/api/insecticides", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(d)})
@@ -256,7 +283,7 @@ function saveItem(){
       const j = await r.json().catch(()=>({}));
       if(!r.ok || !j.ok){ toast("保存失败："+(j.msg||r.status)); return; }
       toast(d.id ? "✓ 已更新" : "✓ 已添加");
-      clearForm(); await loadAll();
+      closeModal(); await loadAll();
     })
     .catch(()=>toast("连接后台失败"))
     .finally(()=>{ btn.disabled=false; btn.textContent="💾 保存"; });
@@ -266,15 +293,17 @@ async function editItem(id){
     const r = await fetch("/api/insecticides/"+encodeURIComponent(id), {cache:"no-store"});
     if(!r.ok){ toast("读取失败"); return; }
     const d = await r.json();
+    clearForm();
     draft = {id: d.id};
-    FIELDS.forEach(k=>{ document.getElementById("f_"+k).value = d[k]||""; });
+    FIELDS.forEach(k=>{ const el=document.getElementById("f_"+k); if(el) el.value = d[k]||""; });
     document.getElementById("formTitle").textContent="✏ 编辑："+(d.tradeName||d.drugName);
     document.getElementById("cancelBtn").style.display="";
-    window.scrollTo({top:0,behavior:"smooth"});
+    document.getElementById("modalMask").classList.add("show");
+    document.getElementById("modalMask").scrollTop = 0;
   }catch(e){ toast("连接后台失败"); }
 }
 async function deleteItem(id){
-  if(!confirm("确定删除该条杀虫剂记录？")) return;
+  if(!confirm("确定删除该条药物记录？")) return;
   const r = await fetch("/api/insecticides/"+encodeURIComponent(id), {method:"DELETE"});
   if(!r.ok){ toast("删除失败"); return; }
   await loadAll(); toast("已删除");
@@ -285,6 +314,6 @@ clearForm();
 const _bid=document.getElementById("buildId"); if(_bid) _bid.textContent=PAGE_BUILD;
 checkBuild(); loadAll();
 </script>
-<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-1000 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
+<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-1030 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
 </body>
 </html>
