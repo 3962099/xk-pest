@@ -115,7 +115,7 @@ def read_state():
 def _build_id():
     try:
         newest = 0
-        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py", "portal.html", "staff.html", "insecticides.html"):
+        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py", "portal.html", "staff.html", "insecticides.html", "home.html"):
             p = os.path.join(BASE, fn)
             if os.path.exists(p):
                 newest = max(newest, int(os.path.getmtime(p)))

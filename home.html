@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作台首页</title>
+<style>
+  :root{ --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
+    --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.5;font-size:15px}
+  header{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;padding:12px 16px;
+    position:sticky;top:0;z-index:20}
+  header h1{margin:0;font-size:18px}
+  header .sub{font-size:12px;opacity:.9;margin-top:2px}
+  .wrap{max-width:1000px;margin:0 auto;padding:12px}
+  .summary{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px;
+    font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .summary.ok{background:#e8f5e9;border-color:#a5d6a7;color:var(--green-d)}
+  .summary.warn{background:#fff3e0;border-color:#ffcc80;color:#e65100}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .card h2{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card h2 .sp{flex:1}
+  label{display:block;font-size:13px;color:var(--muted);margin:9px 0 4px}
+  .badge{display:inline-block;min-width:24px;text-align:center;padding:2px 10px;border-radius:12px;
+    font-size:13px;font-weight:700;color:#fff;background:var(--green)}
+  .badge.warn{background:var(--amber)}
+  .badge.bad{background:var(--red)}
+  .note{font-size:12px;color:var(--muted)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap}
+  .pill.ok{background:#e8f5e9;color:var(--green)}
+  .pill.warn{background:#fff3e0;color:var(--amber)}
+  .pill.bad{background:#ffebee;color:var(--red)}
+  .row{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff;
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .row .info{flex:1;min-width:160px}
+  .row .name{font-weight:600;font-size:15px}
+  .row .meta{font-size:12px;color:var(--muted)}
+  .link{display:inline-block;margin-top:6px;color:var(--green);font-weight:600;font-size:14px;
+    text-decoration:none;border-bottom:1px solid var(--green)}
+  .empty{color:var(--muted);text-align:center;padding:14px;font-size:14px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
+    background:#333;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;
+    transition:.25s;z-index:99;opacity:0;max-width:90vw}
+  .toast.show{transform:translateX(-50%);opacity:1}
+  .overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);display:none;
+    flex-direction:column;align-items:center;justify-content:center;z-index:200;font-size:15px;color:var(--txt)}
+  .overlay.show{display:flex}
+  .overlay .spin{width:34px;height:34px;border:4px solid var(--line);border-top-color:var(--green);
+    border-radius:50%;animation:sp .9s linear infinite;margin-bottom:14px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🐞 工作台首页</h1>
+    <div class="sub">到期预警与待办一览，点「去处理」直接跳转对应页面</div>
+  </header>
+<div class="wrap">
+
+  <div class="summary" id="summary"></div>
+
+  <div class="card">
+    <h2>🧪 农药登记证 / 药品有效期 30天内到期
+      <span class="sp"></span><span class="badge" id="bDrug">0</span></h2>
+    <div id="drugList"></div>
+    <a class="link" href="/insecticides">去药物清单处理 →</a>
+  </div>
+
+  <div class="card">
+    <h2>🪪 健康证 30天内到期
+      <span class="sp"></span><span class="badge" id="bHealth">0</span></h2>
+    <div id="healthList"></div>
+    <a class="link" href="/staff">去现场人员处理 →</a>
+  </div>
+
+  <div class="card">
+    <h2>✍ 代办事项：消杀确认待补签
+      <span class="sp"></span><span class="badge" id="bTodo">0</span></h2>
+    <div id="todoList"></div>
+    <a class="link" href="/daily">去日常消杀补签 →</a>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="overlay" id="overlay"><div class="spin"></div><div id="overlayMsg">⏳ 正在连接服务器…</div></div>
+
+<script>
+const PAGE_BUILD = "__BUILD__";
+let state = {insecticides:[], workers:[], confirmations:{}};
+
+function ea(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show");
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove("show"),2600); }
+async function checkBuild(){
+  if(!PAGE_BUILD || PAGE_BUILD.indexOf("__")===0) return false;
+  try{
+    const r = await fetch("/api/version", {cache:"no-store"});
+    const j = await r.json();
+    if(j && j.build && j.build !== PAGE_BUILD){
+      const key = "xk_reload_" + j.build;
+      if(!sessionStorage.getItem(key)){ sessionStorage.setItem(key,"1"); location.reload(); return true; }
+    }
+  }catch(e){}
+  return false;
+}
+
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  return Math.floor((new Date(dateStr+"T23:59:59") - new Date()) / 86400000);
+}
+function classify(dateStr){
+  const days = daysUntil(dateStr);
+  if(days === null) return {cls:"", txt:"未填日期", n:999};
+  if(days < 0)   return {cls:"bad",  txt:"已过期 "+(-days)+" 天", n:2};
+  if(days <= 30) return {cls:"warn", txt:(days===0?"今天到期":days+" 天后到期"), n:1};
+  return {cls:"ok", txt:"有效至 "+dateStr, n:0};
+}
+
+/* ===== 数据（带冷启动自动重试） ===== */
+function showOverlay(msg){ const o=document.getElementById("overlay"); if(msg) document.getElementById("overlayMsg").textContent=msg; o.classList.add("show"); }
+function hideOverlay(){ document.getElementById("overlay").classList.remove("show"); }
+async function loadAll(loud){ await loadAllRetry(loud, 0); }
+async function loadAllRetry(loud, attempt){
+  try{
+    if(attempt>0) showOverlay("⏳ 服务器启动中（第 "+attempt+" 次重试）…首次打开稍慢请稍候");
+    const r = await fetch("/api/state", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    state = await r.json();
+    state.insecticides = state.insecticides || [];
+    state.workers = state.workers || [];
+    state.confirmations = state.confirmations || {};
+    hideOverlay();
+    renderAll();
+    if(loud) toast("✓ 已刷新");
+  }catch(e){
+    if(attempt < 10){ setTimeout(()=>loadAllRetry(loud, attempt+1), 4500); return; }
+    hideOverlay();
+    toast("⚠ 仍无法连接，请下拉刷新页面或稍后重试（免费服务器偶发休眠）");
+  }
+}
+
+/* ===== 渲染 ===== */
+function renderAll(){
+  renderDrug(); renderHealth(); renderTodo(); renderSummary();
+}
+function renderDrug(){
+  const box = document.getElementById("drugList");
+  const list = state.insecticides
+    .map(d=>{ const c=classify(d.validUntil); return {d, c}; })
+    .filter(x=>x.c.n>=1)
+    .sort((a,b)=>a.c.n-b.c.n || daysUntil(a.d.validUntil)-daysUntil(b.d.validUntil));
+  document.getElementById("bDrug").textContent = list.length;
+  document.getElementById("bDrug").className = "badge " + (list.some(x=>x.c.n===2)?"bad":list.length?"warn":"");
+  if(!list.length){ box.innerHTML='<div class="empty">✓ 所有药品有效期均正常（30 天以上）</div>'; return; }
+  box.innerHTML = list.map(x=>{
+    const d=x.d, c=x.c;
+    const title = ea(d.tradeName||"（未填商品名）") + (d.drugName?` <span class="note">· ${ea(d.drugName)}</span>`:"");
+    return `<div class="row">
+      <div class="info">
+        <div class="name">${title}</div>
+        <div class="meta">有效期至 ${ea(d.validUntil||"—")}${d.regCert?`　登记证 ${ea(d.regCert)}`:""}</div>
+      </div>
+      <span class="pill ${c.cls}">${ea(c.txt)}</span>
+    </div>`;
+  }).join("");
+}
+function renderHealth(){
+  const box = document.getElementById("healthList");
+  const list = state.workers
+    .map(w=>{ const c=classify(w.healthExpiry); return {w, c}; })
+    .filter(x=>x.c.n>=1)
+    .sort((a,b)=>a.c.n-b.c.n || daysUntil(a.w.healthExpiry)-daysUntil(b.w.healthExpiry));
+  document.getElementById("bHealth").textContent = list.length;
+  document.getElementById("bHealth").className = "badge " + (list.some(x=>x.c.n===2)?"bad":list.length?"warn":"");
+  if(!list.length){ box.innerHTML='<div class="empty">✓ 所有人员健康证均正常（30 天以上）</div>'; return; }
+  box.innerHTML = list.map(x=>{
+    const w=x.w, c=x.c;
+    return `<div class="row">
+      <div class="info">
+        <div class="name">${ea(w.name)}${w.post?` <span class="note">· ${ea(w.post)}</span>`:""}</div>
+        <div class="meta">健康证有效期至 ${ea(w.healthExpiry||"—")}</div>
+      </div>
+      <span class="pill ${c.cls}">${ea(c.txt)}</span>
+    </div>`;
+  }).join("");
+}
+function renderTodo(){
+  const box = document.getElementById("todoList");
+  const confs = Object.values(state.confirmations || {}).filter(c=>!c.confirmed);
+  confs.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  document.getElementById("bTodo").textContent = confs.length;
+  document.getElementById("bTodo").className = "badge " + (confs.length?"warn":"");
+  if(!confs.length){ box.innerHTML='<div class="empty">✓ 所有消杀确认均已双方签完</div>'; return; }
+  box.innerHTML = confs.map(c=>{
+    let txt, cls="warn";
+    const hp=!!c.hasProvider, hc=!!c.hasCompany;
+    if(hp&&hc){ txt="🟡 双方均签但未标记完成"; }
+    else if(hp){ txt="🟡 仅服务商已签，待我司补签"; }
+    else if(hc){ txt="🟡 仅我司已签，待服务商补签"; }
+    else { txt="⏳ 双方均未签名"; }
+    return `<div class="row">
+      <div class="info">
+        <div class="name">消杀确认 ${ea(c.date||"—")}</div>
+        <div class="meta">日常消杀签名待跟进</div>
+      </div>
+      <span class="pill ${cls}">${ea(txt)}</span>
+    </div>`;
+  }).join("");
+}
+function renderSummary(){
+  const box = document.getElementById("summary");
+  const drug = parseInt(document.getElementById("bDrug").textContent,10);
+  const health = parseInt(document.getElementById("bHealth").textContent,10);
+  const todo = parseInt(document.getElementById("bTodo").textContent,10);
+  const total = drug + health + todo;
+  if(total===0){
+    box.className="summary ok";
+    box.innerHTML="✓ 全部正常：无即将到期证件，无待补签确认。";
+  } else {
+    box.className="summary warn";
+    box.innerHTML=`🔔 共有 <strong>${total}</strong> 项需关注：药品有效期 ${drug} 项 · 健康证 ${health} 项 · 待补签 ${todo} 项。点击下方卡片去处理。`;
+  }
+}
+
+/* init */
+const _bid=document.getElementById("buildId"); if(_bid) _bid.textContent=PAGE_BUILD;
+checkBuild(); loadAll();
+</script>
+<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-1200 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
+</body>
+</html>
