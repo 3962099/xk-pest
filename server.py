@@ -179,6 +179,11 @@ def staff_page():
 def insecticides_page():
     return _serve_page("insecticides.html")
 
+@app.route("/home")
+@app.route("/home.html")
+def home_page():
+    return _serve_page("home.html")
+
 @app.route("/api/version")
 def api_version():
     return jsonify({"build": BUILD_ID})
