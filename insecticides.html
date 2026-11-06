@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>杀虫剂清单</title>
+<style>
+  :root{ --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
+    --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--txt);line-height:1.5;font-size:15px}
+  header{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;padding:12px 16px;
+    position:sticky;top:0;z-index:20}
+  header h1{margin:0;font-size:17px}
+  header .nav{display:flex;gap:14px;margin-top:6px;font-size:13px}
+  header .nav a{color:#e8f5e9;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.4)}
+  .wrap{max-width:1000px;margin:0 auto;padding:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  .card h2{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card h2 .sp{flex:1}
+  label{display:block;font-size:13px;color:var(--muted);margin:9px 0 4px}
+  input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;
+    font-size:15px;background:#fff;color:var(--txt)}
+  textarea{resize:vertical;min-height:56px}
+  button{cursor:pointer;border:none;border-radius:8px;font-size:15px;padding:10px 15px;
+    background:var(--green);color:#fff;font-weight:600}
+  button.ghost{background:#fff;color:var(--green);border:1px solid var(--green);font-weight:400}
+  button.danger{background:#fff;color:var(--red);border:1px solid var(--red);font-weight:400}
+  button.mini{font-size:12px;padding:5px 9px;font-weight:400}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .note{font-size:12px;color:var(--muted)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap}
+  .pill.ok{background:#e8f5e9;color:var(--green)}
+  .pill.warn{background:#fff3e0;color:var(--amber)}
+  .pill.bad{background:#ffebee;color:var(--red)}
+  .pill.tag{background:#e3f2fd;color:#1565c0}
+  .warnbox{border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px;display:none}
+  .warnbox.show{display:block}
+  .warnbox.bad{background:#ffebee;border:1px solid #ef9a9a;color:#b71c1c}
+  .warnbox.warn{background:#fff3e0;border:1px solid #ffcc80;color:#e65100}
+  .item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fff}
+  .item .head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .item .name{font-weight:600;font-size:15px}
+  .item .meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;margin-top:8px}
+  @media(min-width:700px){ .grid3{grid-template-columns:1fr 1fr 1fr} }
+  .kv{font-size:13px}
+  .kv b{color:var(--muted);font-weight:400;font-size:12px;display:block}
+  .search{display:flex;gap:8px;margin-bottom:10px}
+  .search input{flex:1}
+  .empty{color:var(--muted);text-align:center;padding:18px;font-size:14px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(80px);
+    background:#333;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;
+    transition:.25s;z-index:99;opacity:0;max-width:90vw}
+  .toast.show{transform:translateX(-50%);opacity:1}
+  @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧪 杀虫剂清单</h1>
+  <div class="nav"><a href="/">← 平台首页</a><a href="/staff">现场人员</a><a href="/report">现场报告</a><a href="/admin">管理后台</a></div>
+</header>
+<div class="wrap">
+
+  <div class="warnbox" id="warnBox"></div>
+
+  <div class="card">
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增杀虫剂</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+      <div><label>商品名称 *</label><input id="f_tradeName" placeholder="如 拜灭士" maxlength="60"></div>
+      <div><label>药品名称</label><input id="f_drugName" placeholder="如 吡虫啉杀饵胶" maxlength="60"></div>
+      <div><label>农药登记证</label><input id="f_regCert" placeholder="如 PD20112345" maxlength="40"></div>
+      <div><label>有效期限至</label><input type="date" id="f_validUntil">
+        <div class="note">到期前 30 天页面会自动提醒</div></div>
+      <div><label>有效成分</label><input id="f_ingredients" placeholder="如 吡虫啉 2.15%" maxlength="80"></div>
+      <div><label>剂型</label><input id="f_form" placeholder="如 胶饵 / 悬浮剂 / 毒饵" maxlength="30"></div>
+      <div><label>毒性</label><input id="f_toxicity" placeholder="如 微毒 / 低毒" maxlength="20"></div>
+      <div><label>生产商</label><input id="f_maker" placeholder="如 拜耳" maxlength="60"></div>
+    </div>
+    <label>使用方法</label><textarea id="f_usage" placeholder="如 点涂于缝隙、角落，每点米粒大小"></textarea>
+    <label>目标虫害</label><input id="f_targets" placeholder="如 蟑螂、蚂蚁" maxlength="80">
+    <label>配置方法</label><textarea id="f_mixMethod" placeholder="如 免稀释直接使用；或按 1:100 兑水稀释"></textarea>
+    <label>使用场所</label><input id="f_places" placeholder="如 厨房、配电房、绿化带" maxlength="120">
+    <label>包装规格</label><input id="f_packSpec" placeholder="如 5g/支、500ml/瓶" maxlength="40">
+    <div class="btn-row">
+      <button id="saveBtn" onclick="saveItem()">💾 保存</button>
+      <button class="ghost" id="cancelBtn" style="display:none" onclick="clearForm()">取消编辑</button>
+      <span class="note" id="saveHint"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px">清单列表</span>
+      <span class="sp"></span>
+      <button class="ghost mini" onclick="loadAll(true)">🔄 刷新</button></h2>
+    <div class="search"><input id="q" placeholder="🔍 搜索：商品名 / 药品名 / 目标虫害 / 使用场所" oninput="renderList()"></div>
+    <div id="listBox"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PAGE_BUILD = "__BUILD__";
+const FIELDS = ["tradeName","drugName","regCert","validUntil","ingredients","form","toxicity","maker","usage","targets","mixMethod","places","packSpec"];
+let items = [], draft = {id:null};
+
+function ea(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function addYears(dateStr, n){ const d=new Date(dateStr||todayStr()); d.setFullYear(d.getFullYear()+n); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show");
+  clearTimeout(window._tt); window._tt=setTimeout(()=>t.classList.remove("show"),2600); }
+
+async function checkBuild(){
+  if(!PAGE_BUILD || PAGE_BUILD.indexOf("__")===0) return false;
+  try{
+    const r = await fetch("/api/version", {cache:"no-store"});
+    const j = await r.json();
+    if(j && j.build && j.build !== PAGE_BUILD){
+      const key = "xk_reload_" + j.build;
+      if(!sessionStorage.getItem(key)){ sessionStorage.setItem(key,"1"); location.reload(); return true; }
+    }
+  }catch(e){}
+  return false;
+}
+
+function validState(expiry){
+  if(!expiry) return {cls:"", txt:"", days:null};
+  const d = Math.floor((new Date(expiry+"T23:59:59") - new Date()) / 86400000);
+  if(d < 0)  return {cls:"bad", txt:"已过期 "+(-d)+" 天", days:d};
+  if(d <= 30) return {cls:"warn", txt:"⚠ "+d+" 天后到期", days:d};
+  return {cls:"ok", txt:"✓ 有效至 "+expiry, days:d};
+}
+
+/* ===== 数据 ===== */
+async function loadAll(loud){
+  try{
+    const r = await fetch("/api/insecticides", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    items = await r.json();
+    renderWarn(); renderList();
+    if(loud) toast("✓ 已刷新");
+  }catch(e){ toast("连接后台失败，请检查网络"); }
+}
+function renderWarn(){
+  const box = document.getElementById("warnBox");
+  const list = [];
+  items.forEach(d=>{
+    const st = validState(d.validUntil);
+    if(st.days !== null && st.days <= 30)
+      list.push(`<div>🧪 <strong>${ea(d.tradeName||d.drugName)}</strong> 有效期${st.days<0?"已过期 "+(-st.days)+" 天":"将在 "+st.days+" 天后到期（"+ea(d.validUntil)+"）"}，请及时更换。</div>`);
+  });
+  if(!list.length){ box.className="warnbox"; box.innerHTML=""; return; }
+  const hasExpired = items.some(d=>{const s=validState(d.validUntil);return s.days!==null&&s.days<0;});
+  box.className = "warnbox show " + (hasExpired ? "bad" : "warn");
+  box.innerHTML = "<div style='font-weight:600;margin-bottom:4px'>🔔 有效期到期提醒</div>" + list.join("");
+}
+function renderList(){
+  const box = document.getElementById("listBox");
+  const q = (document.getElementById("q").value||"").trim().toLowerCase();
+  let list = items;
+  if(q){
+    list = items.filter(d=>FIELDS.some(k=>String(d[k]||"").toLowerCase().includes(q)));
+  }
+  if(!list.length){
+    box.innerHTML = q ? '<div class="empty">没有匹配的条目，换个关键词试试。</div>'
+                      : '<div class="empty">清单还是空的。用上方表单添加第一款杀虫剂。</div>';
+    return;
+  }
+  box.innerHTML = list.map(d=>{
+    const st = validState(d.validUntil);
+    const title = ea(d.tradeName||"（未填商品名）") + (d.drugName?` <span class="note">· ${ea(d.drugName)}</span>`:"");
+    const tags = [d.form?`<span class="pill tag">${ea(d.form)}</span>`:"",
+                  d.toxicity?`<span class="pill tag">毒性：${ea(d.toxicity)}</span>`:"",
+                  st.cls?`<span class="pill ${st.cls}">${ea(st.txt)}</span>`:""].join(" ");
+    const kv = (l,v)=>v?`<div class="kv"><b>${l}</b>${ea(v)}</div>`:"";
+    const detail = kv("有效成分",d.ingredients)+kv("农药登记证",d.regCert)+kv("生产商",d.maker)
+      +kv("目标虫害",d.targets)+kv("使用场所",d.places)+kv("包装规格",d.packSpec)
+      +kv("使用方法",d.usage)+kv("配置方法",d.mixMethod)+(d.validUntil&&!st.cls?kv("有效期限至",d.validUntil):"");
+    return `<div class="item">
+      <div class="head"><span class="name">${title}</span><span class="sp" style="flex:1"></span>${tags}</div>
+      <div class="grid3">${detail}</div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="ghost mini" onclick="editItem('${ea(d.id)}')">✏ 编辑</button>
+        <button class="danger mini" onclick="deleteItem('${ea(d.id)}')">🗑 删除</button>
+        <span class="note">更新：${ea((d.updatedAt||"").slice(0,10))}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ===== 表单 ===== */
+function clearForm(){
+  draft = {id:null};
+  FIELDS.forEach(k=>{ document.getElementById("f_"+k).value = ""; });
+  document.getElementById("f_validUntil").value = "";
+  document.getElementById("formTitle").textContent="＋ 新增杀虫剂";
+  document.getElementById("saveBtn").textContent="💾 保存";
+  document.getElementById("cancelBtn").style.display="none";
+}
+function saveItem(){
+  const d = {id: draft.id || null};
+  FIELDS.forEach(k=>{ d[k] = document.getElementById("f_"+k).value.trim(); });
+  if(!d.tradeName && !d.drugName){ toast("商品名称与药品名称至少填一项"); return; }
+  const btn = document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="保存中…";
+  fetch("/api/insecticides", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(d)})
+    .then(async r=>{
+      const j = await r.json().catch(()=>({}));
+      if(!r.ok || !j.ok){ toast("保存失败："+(j.msg||r.status)); return; }
+      toast(d.id ? "✓ 已更新" : "✓ 已添加");
+      clearForm(); await loadAll();
+    })
+    .catch(()=>toast("连接后台失败"))
+    .finally(()=>{ btn.disabled=false; btn.textContent="💾 保存"; });
+}
+async function editItem(id){
+  try{
+    const r = await fetch("/api/insecticides/"+encodeURIComponent(id), {cache:"no-store"});
+    if(!r.ok){ toast("读取失败"); return; }
+    const d = await r.json();
+    draft = {id: d.id};
+    FIELDS.forEach(k=>{ document.getElementById("f_"+k).value = d[k]||""; });
+    document.getElementById("formTitle").textContent="✏ 编辑："+(d.tradeName||d.drugName);
+    document.getElementById("cancelBtn").style.display="";
+    window.scrollTo({top:0,behavior:"smooth"});
+  }catch(e){ toast("连接后台失败"); }
+}
+async function deleteItem(id){
+  if(!confirm("确定删除该条杀虫剂记录？")) return;
+  const r = await fetch("/api/insecticides/"+encodeURIComponent(id), {method:"DELETE"});
+  if(!r.ok){ toast("删除失败"); return; }
+  await loadAll(); toast("已删除");
+}
+
+/* init */
+clearForm();
+const _bid=document.getElementById("buildId"); if(_bid) _bid.textContent=PAGE_BUILD;
+checkBuild(); loadAll();
+</script>
+<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-0900 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
+</body>
+</html>

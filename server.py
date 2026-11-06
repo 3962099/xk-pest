@@ -61,6 +61,8 @@ def ensure():
     k.execute(adapt("CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY, date TEXT, data TEXT, created_at TEXT, updated_at TEXT)"))
     # 现场人员：姓名/岗位/上岗证/健康证（证件图为压缩后 base64 存 JSON）
     k.execute(adapt("CREATE TABLE IF NOT EXISTS workers(id TEXT PRIMARY KEY, data TEXT, created_at TEXT, updated_at TEXT)"))
+    # 杀虫剂清单：13 字段纯文本条目
+    k.execute(adapt("CREATE TABLE IF NOT EXISTS insecticides(id TEXT PRIMARY KEY, data TEXT, created_at TEXT, updated_at TEXT)"))
     c.commit(); c.close()
 
 def get_meta(kk, d=None):
@@ -100,9 +102,12 @@ def read_state():
     crep = [report_summary(json.loads(r[0])) for r in k.fetchall()]
     k.execute(adapt("SELECT data FROM workers ORDER BY created_at"))
     cwk = [worker_summary(json.loads(r[0])) for r in k.fetchall()]
+    k.execute(adapt("SELECT data FROM insecticides ORDER BY created_at DESC"))
+    cins = [json.loads(r[0]) for r in k.fetchall()]
     c.close()
     return {"provider": get_meta("provider", "能多洁"), "records": crecs,
-            "confirmations": conf, "drugs": cdr, "reports": crep, "workers": cwk}
+            "confirmations": conf, "drugs": cdr, "reports": crep, "workers": cwk,
+            "insecticides": cins}
 
 # 构建标识：取 index.html 的修改时间，每次部署都会变。
 # 用途：页面里内嵌这个值，前端发现「自己带的版本」与「服务器当前版本」不一致时自动刷新一次，
@@ -110,7 +115,7 @@ def read_state():
 def _build_id():
     try:
         newest = 0
-        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py", "portal.html", "staff.html"):
+        for fn in ("index.html", "admin.html", "report.html", "stations.js", "server.py", "portal.html", "staff.html", "insecticides.html"):
             p = os.path.join(BASE, fn)
             if os.path.exists(p):
                 newest = max(newest, int(os.path.getmtime(p)))
@@ -168,6 +173,11 @@ def admin_page():
 @app.route("/staff.html")
 def staff_page():
     return _serve_page("staff.html")
+
+@app.route("/insecticides")
+@app.route("/insecticides.html")
+def insecticides_page():
+    return _serve_page("insecticides.html")
 
 @app.route("/api/version")
 def api_version():
@@ -384,11 +394,14 @@ def save_worker():
     for ex in list_workers():
         if ex.get("id") != w.get("id") and ex.get("name", "").strip() == name:
             return jsonify({"ok": False, "msg": "该姓名已存在，请直接编辑原人员"}), 400
-    # 证件图大小限制（压缩后 base64，约 800KB 上限，防误传大文件）
+    # 证件大小限制：图片（压缩后 base64）约 800KB；PDF 文件允许到 8MB（base64 后约 11MB）
     for key in ("certUp", "certHealth"):
         v = w.get(key)
-        if v and isinstance(v, str) and len(v) > 1200 * 1024:
-            return jsonify({"ok": False, "msg": "证件图片过大，请用手机拍照重试"}), 400
+        if v and isinstance(v, str):
+            limit = 11 * 1024 * 1024 if v.startswith("data:application/pdf") else 1200 * 1024
+            if len(v) > limit:
+                kind = "PDF 文件" if limit > 1200 * 1024 else "证件图片"
+                return jsonify({"ok": False, "msg": kind + "过大，请压缩后再上传"}), 400
     wid = w.get("id") or ("W" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + os.urandom(2).hex())
     w["id"] = wid; w["name"] = name
     now = _now()
@@ -424,6 +437,71 @@ def reset_state():
     c = conn(); k = cur(c)
     k.execute(adapt("DELETE FROM records")); k.execute(adapt("DELETE FROM confirmations"))
     k.execute(adapt("DELETE FROM reports")); k.execute(adapt("DELETE FROM workers"))
+    k.execute(adapt("DELETE FROM insecticides"))
+    c.commit(); c.close()
+    return jsonify({"ok": True})
+
+# ===== 杀虫剂清单：13 字段（商品名称/药品名称/农药登记证/有效期限/有效成分/剂型/毒性/生产商/使用方法/目标虫害/配置方法/使用场所/包装规格） =====
+INS_FIELDS = ["tradeName", "drugName", "regCert", "validUntil", "ingredients", "form",
+              "toxicity", "maker", "usage", "targets", "mixMethod", "places", "packSpec"]
+
+def list_insecticides():
+    c = conn(); k = cur(c)
+    k.execute(adapt("SELECT data FROM insecticides ORDER BY created_at DESC"))
+    rows = [json.loads(r[0]) for r in k.fetchall()]; c.close()
+    return rows
+
+@app.route("/api/insecticides", methods=["GET"])
+def get_insecticides():
+    return jsonify(list_insecticides())
+
+@app.route("/api/insecticides", methods=["POST"])
+def save_insecticide():
+    try:
+        d = request.get_json(force=True)
+    except Exception:
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    if not isinstance(d, dict):
+        return jsonify({"ok": False, "msg": "格式错误"}), 400
+    trade = (d.get("tradeName") or "").strip()
+    drug = (d.get("drugName") or "").strip()
+    if not trade and not drug:
+        return jsonify({"ok": False, "msg": "商品名称与药品名称至少填一项"}), 400
+    # 同名拦截：商品名称+药品名称 都相同视为重复（编辑自身除外）
+    for ex in list_insecticides():
+        if ex.get("id") != d.get("id") and (ex.get("tradeName", "").strip() == trade
+                and ex.get("drugName", "").strip() == drug and trade and drug):
+            return jsonify({"ok": False, "msg": "相同商品名称+药品名称的条目已存在，请直接编辑原条目"}), 400
+    iid = d.get("id") or ("I" + datetime.datetime.now().strftime("%Y%m%d%H%M%S") + os.urandom(2).hex())
+    d["id"] = iid
+    if trade: d["tradeName"] = trade
+    if drug: d["drugName"] = drug
+    for kk in INS_FIELDS:
+        if d.get(kk) is not None: d[kk] = str(d[kk]).strip()
+    now = _now()
+    d.setdefault("createdAt", now)
+    d["updatedAt"] = now
+    payload = json.dumps(d, ensure_ascii=False)
+    c = conn(); k = cur(c)
+    k.execute(adapt("INSERT INTO insecticides(id,data,created_at,updated_at) VALUES(?,?,?,?) "
+                    "ON CONFLICT(id) DO UPDATE SET data=?, updated_at=?"),
+              (iid, payload, d["createdAt"], now, payload, now))
+    c.commit(); c.close()
+    return jsonify({"ok": True, "id": iid, "item": d})
+
+@app.route("/api/insecticides/<iid>", methods=["GET"])
+def get_insecticide(iid):
+    c = conn(); k = cur(c)
+    k.execute(adapt("SELECT data FROM insecticides WHERE id=?"), (iid,))
+    row = k.fetchone(); c.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "条目不存在"}), 404
+    return jsonify(json.loads(row[0]))
+
+@app.route("/api/insecticides/<iid>", methods=["DELETE"])
+def delete_insecticide(iid):
+    c = conn(); k = cur(c)
+    k.execute(adapt("DELETE FROM insecticides WHERE id=?"), (iid,))
     c.commit(); c.close()
     return jsonify({"ok": True})
 

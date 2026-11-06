@@ -76,20 +76,22 @@
       <input type="date" id="wExpiry">
       <div class="note">新办默认一年有效；到期前 30 天页面会自动提醒更换</div>
     </div>
-    <h3>证件上传（拍照或从相册选择）</h3>
+    <h3>证件上传（拍照、从相册选择或选 PDF 文件）</h3>
     <div class="photo-pick">
       <div>
         <label>上岗证</label>
-        <input type="file" id="upFile" accept="image/*" style="display:none" onchange="pickPhoto('certUp',this)">
+        <input type="file" id="upFile" accept="image/*,.pdf,application/pdf" style="display:none" onchange="pickPhoto('certUp',this)">
         <img id="prev_certUp" class="thumb" style="display:none" onclick="pickPhoto('certUp',document.getElementById('upFile'))" alt="">
-        <button class="ghost mini" onclick="document.getElementById('upFile').click()">📷 上传上岗证</button>
+        <span id="pdfprev_certUp" style="display:none" class="pill ok" onclick="document.getElementById('upFile').click()" title="点击更换">📄 PDF 已选</span>
+        <button class="ghost mini" onclick="document.getElementById('upFile').click()">📎 上传上岗证</button>
         <button class="danger mini" id="clear_certUp" style="display:none" onclick="clearPhoto('certUp')">✕ 清除</button>
       </div>
       <div>
         <label>健康证</label>
-        <input type="file" id="healthFile" accept="image/*" style="display:none" onchange="pickPhoto('certHealth',this)">
+        <input type="file" id="healthFile" accept="image/*,.pdf,application/pdf" style="display:none" onchange="pickPhoto('certHealth',this)">
         <img id="prev_certHealth" class="thumb" style="display:none" onclick="pickPhoto('certHealth',document.getElementById('healthFile'))" alt="">
-        <button class="ghost mini" onclick="document.getElementById('healthFile').click()">📷 上传健康证</button>
+        <span id="pdfprev_certHealth" style="display:none" class="pill ok" onclick="document.getElementById('healthFile').click()" title="点击更换">📄 PDF 已选</span>
+        <button class="ghost mini" onclick="document.getElementById('healthFile').click()">📎 上传健康证</button>
         <button class="danger mini" id="clear_certHealth" style="display:none" onclick="clearPhoto('certHealth')">✕ 清除</button>
       </div>
     </div>
@@ -194,15 +196,33 @@ function renderList(){
 }
 
 /* ===== 表单 ===== */
+const PDF_MAX = 8 * 1024 * 1024; // 8MB，防止超大文件拖垮数据库
+function isPdf(data){ return typeof data==="string" && data.slice(0,28).indexOf("application/pdf")>=0; }
 function pickPhoto(key, input){
   const f = input.files && input.files[0];
   if(!f) return;
-  if(!/^image\//.test(f.type)){ toast("请选择图片文件"); return; }
-  compressFile(f, url=>{
-    draft[key] = url; showPrev(key);
-    input.value = "";
-    toast("图片已压缩，保存时上传");
-  });
+  if(/^image\//.test(f.type)){
+    compressFile(f, url=>{
+      draft[key] = url; showPrev(key);
+      input.value = "";
+      toast("图片已压缩，保存时上传");
+    });
+    return;
+  }
+  if(f.type==="application/pdf" || /\.pdf$/i.test(f.name)){
+    if(f.size > PDF_MAX){ toast("PDF 太大（超过 8MB），请压缩后再上传"); input.value=""; return; }
+    const rd = new FileReader();
+    rd.onload = ()=>{
+      draft[key] = rd.result; showPrev(key);
+      input.value = "";
+      toast("PDF 已就绪，保存时上传");
+    };
+    rd.onerror = ()=>{ toast("PDF 读取失败，请重试"); input.value=""; };
+    rd.readAsDataURL(f);
+    return;
+  }
+  toast("请选择图片或 PDF 文件");
+  input.value = "";
 }
 function compressFile(file, cb){
   const img = new Image();
@@ -220,8 +240,18 @@ function compressFile(file, cb){
 }
 function showPrev(key){
   const img = document.getElementById("prev_"+key), btn = document.getElementById("clear_"+key);
-  if(draft[key]){ img.src=draft[key]; img.style.display=""; btn.style.display=""; }
-  else { img.style.display="none"; img.removeAttribute("src"); btn.style.display="none"; }
+  const pdfChip = document.getElementById("pdfprev_"+key);
+  if(draft[key] && isPdf(draft[key])){
+    img.style.display="none"; img.removeAttribute("src");
+    if(pdfChip) pdfChip.style.display="";
+    btn.style.display="";
+  } else if(draft[key]){
+    if(pdfChip) pdfChip.style.display="none";
+    img.src=draft[key]; img.style.display=""; btn.style.display="";
+  } else {
+    if(pdfChip) pdfChip.style.display="none";
+    img.style.display="none"; img.removeAttribute("src"); btn.style.display="none";
+  }
 }
 function clearPhoto(key){ draft[key]=null; showPrev(key); }
 function clearForm(){
@@ -273,6 +303,15 @@ async function deleteWorker(id){
   if(!r.ok){ toast("删除失败"); return; }
   await loadAll(); toast("已删除");
 }
+function certBlock(label, data, extra){
+  if(!data) return `<div><label>${label}${extra||""}（未上传）</label></div>`;
+  if(isPdf(data)){
+    return `<div><label>${label}${extra||""}（PDF 文档）</label>
+      <iframe src="${data}" style="width:100%;height:420px;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe>
+      <div class="btn-row"><a class="ghost mini" style="text-decoration:none;display:inline-block" href="${data}" download="${label}.pdf" target="_blank">⬇ 打开/下载 PDF</a></div></div>`;
+  }
+  return `<div><label>${label}${extra||""}</label><img src="${data}" alt="${label}"></div>`;
+}
 async function viewCerts(id){
   try{
     const r = await fetch("/api/workers/"+encodeURIComponent(id), {cache:"no-store"});
@@ -280,8 +319,8 @@ async function viewCerts(id){
     const w = await r.json();
     document.getElementById("certModalTitle").textContent = "证件查看 · "+w.name+(w.post?"（"+w.post+"）":"");
     document.getElementById("certModalBody").innerHTML =
-      `<div><label>上岗证 ${w.certUp?"":"（未上传）"}</label>${w.certUp?`<img src="${w.certUp}" alt="上岗证">`:""}</div>`+
-      `<div><label>健康证（有效期至 ${ea(w.healthExpiry||"—")}）${w.certHealth?"":"（未上传）"}</label>${w.certHealth?`<img src="${w.certHealth}" alt="健康证">`:""}</div>`;
+      certBlock("上岗证", w.certUp) +
+      certBlock("健康证", w.certHealth, "（有效期至 "+ea(w.healthExpiry||"—")+"）");
     document.getElementById("certModal").classList.add("show");
   }catch(e){ toast("连接后台失败"); }
 }
@@ -292,9 +331,6 @@ document.getElementById("wExpiry").value = addYears(todayStr(),1);
 const _bid=document.getElementById("buildId"); if(_bid) _bid.textContent=PAGE_BUILD;
 checkBuild(); loadAll();
 </script>
-<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-05-1600 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
-</body>
-</html>
-</script>
+<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-0900 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
 </body>
 </html>
