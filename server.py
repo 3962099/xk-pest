@@ -7,7 +7,7 @@
 #            否则回退本地/卷 SQLite（DATA_DIR 可配置，默认脚本目录或 /data）
 #  - 接口为「逐条追加 / 单日确认」模型，多端（服务商手机、我司电脑）同时写不会互相覆盖
 #  - 本机同步脚本用 GET /api/state 拉全量，再写入企微智能表格（按 记录ID 去重）
-import os, json, datetime, sqlite3
+import os, io, json, datetime, sqlite3, re
 from flask import Flask, request, jsonify, send_from_directory
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -186,6 +186,76 @@ def api_version():
 @app.route("/api/health")
 def health():
     return jsonify({"ok": True, "db": "postgres" if USE_PG else "sqlite", "build": BUILD_ID})
+
+# ---- 文档解析：把 PDF / Word(.docx) 里的文字抽出来，再按标签识别 13 个字段 ----
+# 字段标签（一个字段可有多个别名，按文档常见写法兜底）
+_DRUG_LABELS = [
+    ("tradeName",  ["商品名称", "商品名", "品名", "产品名称"]),
+    ("drugName",   ["药品名称", "通用名", "农药名称"]),
+    ("regCert",    ["农药登记证", "登记证", "登记证号", "农药登记证号", "登记号"]),
+    ("validUntil", ["有效期限", "有效期", "有效期至", "保质期", "保质期至", "过期日期"]),
+    ("ingredients",["有效成分", "有效成分含量", "成分"]),
+    ("form",       ["剂型"]),
+    ("toxicity",   ["毒性", "毒性级别", "毒性分级", "毒性(级)"]),
+    ("maker",      ["生产商", "生产厂", "生产厂家", "生产厂商", "生产企业", "公司名称", "制造厂"]),
+    ("usage",      ["使用方法", "使用技术", "使用说明", "使用技术和方法"]),
+    ("targets",    ["目标虫害", "防治对象", "靶标", "防治靶标", "适用害虫"]),
+    ("mixMethod",  ["配置方法", "稀释方法", "使用剂量", "稀释倍数", "稀释比例", "配药方法", "配制方法"]),
+    ("places",     ["使用场所", "使用范围", "适用场所", "适用范围", "施药场所"]),
+    ("packSpec",   ["包装规格", "规格", "净含量", "包装"]),
+]
+_ALL_LABEL_RE = re.compile("(" + "|".join(re.escape(v) for _, vs in _DRUG_LABELS for v in vs) + ")")
+def parse_drug_fields(text):
+    fields = {}
+    def grab(variants):
+        # 别名按长度降序，避免「农药登记证」抢先匹配「农药登记证号」
+        for line in text.splitlines():
+            for v in sorted(variants, key=len, reverse=True):
+                m = re.search(re.escape(v) + r"\s*[:：]?\s*(.*)", line)
+                if m and m.group(1).strip():
+                    val = m.group(1).strip()
+                    # 同一行可能紧跟下一个字段标签，截断它
+                    val = _ALL_LABEL_RE.split(val)[0].strip(" ：:、-—")
+                    if val:
+                        return val
+        return ""
+    for key, variants in _DRUG_LABELS:
+        val = grab(variants)
+        if key == "validUntil":
+            dm = re.search(r"(\d{4})[.\-/年](\d{1,2})[.\-/月](\d{1,2})", val or "")
+            if dm:
+                val = "%s-%02d-%02d" % (dm.group(1), int(dm.group(2)), int(dm.group(3)))
+            else:
+                val = ""  # 没提取到日期就不填，避免误填
+        fields[key] = val
+    return fields
+
+@app.route("/api/extract-text", methods=["POST"])
+def extract_text():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "msg": "未收到文件"}), 400
+    name = (f.filename or "").lower()
+    raw = f.read()
+    try:
+        if name.endswith(".pdf"):
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(raw))
+            text = "\n".join((p.extract_text() or "") for p in reader.pages)
+        elif name.endswith(".docx"):
+            import docx
+            d = docx.Document(io.BytesIO(raw))
+            text = "\n".join(p.text for p in d.paragraphs)
+        elif name.endswith(".doc"):
+            return jsonify({"ok": False, "msg": "暂不支持旧版 .doc，请在 Word 里另存为 .docx 或导出 PDF 后再导入"}), 400
+        else:
+            return jsonify({"ok": False, "msg": "仅支持 PDF 或 Word(.docx) 文件"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "msg": "文档解析失败：" + str(e)[:80]}), 400
+    text = (text or "").strip()
+    if not text:
+        return jsonify({"ok": False, "msg": "未能从文档提取到文字（可能是扫描图片版 PDF，请用文字版）"}), 400
+    return jsonify({"ok": True, "text": text[:4000], "fields": parse_drug_fields(text)})
 
 # 全量状态（同步脚本 / 前端加载用）
 @app.route("/api/state", methods=["GET"])

@@ -440,22 +440,27 @@ async function checkBuild(){
   return false;
 }
 
-/* 启动时自动判断：连上后台就用共享数据，否则用本机存储 */
+/* 启动时自动判断：连上后台就用共享数据，否则用本机存储（带冷启动重试） */
 async function boot(){
   if(await checkBuild()) return;   // 手机若拿到缓存旧版，自动刷新一次换新版
-  try{
-    const r = await fetch(API("/api/state"));
-    if(r.ok){
-      const s = await r.json();
-      if(s && typeof s === "object" && Array.isArray(s.records)){
-        API_OK = true;
-        providerName = s.provider || "能多洁";
-        records = s.records || [];
-        confirmations = s.confirmations || {};
-        drugs = s.drugs || [];
+  let lastErr = null;
+  for(let attempt=0; attempt<=10; attempt++){
+    try{
+      const r = await fetch(API("/api/state"));
+      if(r.ok){
+        const s = await r.json();
+        if(s && typeof s === "object" && Array.isArray(s.records)){
+          API_OK = true;
+          providerName = s.provider || "能多洁";
+          records = s.records || [];
+          confirmations = s.confirmations || {};
+          drugs = s.drugs || [];
+        }
+        break;
       }
-    }
-  }catch(e){ /* 静态环境：保持本机模式 */ }
+    }catch(e){ lastErr = e; }
+    if(attempt < 10){ await new Promise(res=>setTimeout(res, 4500)); }  // 冷启动最长约 50s，分批重试自愈
+  }
   document.getElementById("providerName").value = providerName;
   renderPicker();
   signDate = todayStr();

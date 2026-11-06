@@ -151,16 +151,23 @@ function healthState(expiry){
   return {cls:"ok", txt:"✓ 有效至 "+expiry, days:d};
 }
 
-/* ===== 数据 ===== */
+/* ===== 数据（带冷启动自动重试） ===== */
 async function loadAll(loud){
-  try{
-    const r = await fetch("/api/state", {cache:"no-store"});
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const s = await r.json();
-    workers = s.workers || [];
-    renderWarn(); renderList();
-    if(loud) toast("✓ 已刷新");
-  }catch(e){ toast("连接后台失败，请检查网络"); }
+  let attempt = 0;
+  async function once(){
+    try{
+      const r = await fetch("/api/state", {cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const s = await r.json();
+      workers = s.workers || [];
+      renderWarn(); renderList();
+      if(loud) toast("✓ 已刷新");
+    }catch(e){
+      if(attempt < 10){ attempt++; toast("⏳ 服务器启动中，正在重试（"+attempt+"）…"); setTimeout(once, 4500); return; }
+      toast("⚠ 仍无法连接，请下拉刷新或稍后重试（免费服务器偶发休眠）");
+    }
+  }
+  once();
 }
 function renderWarn(){
   const box = document.getElementById("warnBox");

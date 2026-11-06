@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>杀虫剂清单</title>
+<title>药物清单</title>
 <style>
   :root{ --green:#2e7d32; --green-d:#1b5e20; --bg:#f5f7f5; --card:#fff;
     --line:#e0e4e0; --txt:#222; --muted:#6b7280; --red:#c62828; --amber:#ef6c00; }
@@ -54,20 +54,30 @@
     background:#333;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;
     transition:.25s;z-index:99;opacity:0;max-width:90vw}
   .toast.show{transform:translateX(-50%);opacity:1}
+  .overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);display:none;
+    flex-direction:column;align-items:center;justify-content:center;z-index:200;font-size:15px;color:var(--txt)}
+  .overlay.show{display:flex}
+  .overlay .spin{width:34px;height:34px;border:4px solid var(--line);border-top-color:var(--green);
+    border-radius:50%;animation:sp .9s linear infinite;margin-bottom:14px}
+  @keyframes sp{to{transform:rotate(360deg)}}
   @media(max-width:760px){ .wrap{padding:9px} .card{padding:11px} }
 </style>
 </head>
 <body>
-<header>
-  <h1>🧪 杀虫剂清单</h1>
-  <div class="nav"><a href="/">← 平台首页</a><a href="/staff">现场人员</a><a href="/report">现场报告</a><a href="/admin">管理后台</a></div>
-</header>
+  <header>
+    <h1>💊 药物清单</h1>
+    <div class="nav"><a href="/">← 平台首页</a><a href="/staff">现场人员</a><a href="/report">现场报告</a><a href="/admin">管理后台</a></div>
+  </header>
 <div class="wrap">
 
   <div class="warnbox" id="warnBox"></div>
 
   <div class="card">
-    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增杀虫剂</span></h2>
+    <h2><span style="border-left:4px solid var(--green);padding-left:8px" id="formTitle">＋ 新增药物</span>
+      <span class="sp"></span>
+      <button class="ghost mini" onclick="startImport()">📄 导入文档</button>
+      <input type="file" id="impFile" accept=".pdf,.doc,.docx" style="display:none" onchange="onImportFile(this)">
+    </h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
       <div><label>商品名称 *</label><input id="f_tradeName" placeholder="如 拜灭士" maxlength="60"></div>
       <div><label>药品名称</label><input id="f_drugName" placeholder="如 吡虫啉杀饵胶" maxlength="60"></div>
@@ -89,6 +99,7 @@
       <button class="ghost" id="cancelBtn" style="display:none" onclick="clearForm()">取消编辑</button>
       <span class="note" id="saveHint"></span>
     </div>
+    <div class="note" style="margin-top:8px">📄 导入文档：把农药标签 / 说明书的 PDF 或 Word(.docx) 上传，系统会自动识别并填好下方字段，你核对后点保存即可（旧版 .doc 请先另存为 .docx）。</div>
   </div>
 
   <div class="card">
@@ -100,6 +111,7 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="overlay" id="overlay"><div class="spin"></div><div id="overlayMsg">⏳ 正在连接服务器…</div></div>
 
 <script>
 const PAGE_BUILD = "__BUILD__";
@@ -133,15 +145,50 @@ function validState(expiry){
   return {cls:"ok", txt:"✓ 有效至 "+expiry, days:d};
 }
 
-/* ===== 数据 ===== */
+/* ===== 数据（带冷启动自动重试 + 友好提示） ===== */
+function showOverlay(msg){ const o=document.getElementById("overlay"); if(msg) document.getElementById("overlayMsg").textContent=msg; o.classList.add("show"); }
+function hideOverlay(){ document.getElementById("overlay").classList.remove("show"); }
 async function loadAll(loud){
+  await loadAllRetry(loud, 0);
+}
+async function loadAllRetry(loud, attempt){
   try{
+    if(attempt>0) showOverlay("⏳ 服务器启动中（第 "+attempt+" 次重试）…首次打开稍慢请稍候");
     const r = await fetch("/api/insecticides", {cache:"no-store"});
     if(!r.ok) throw new Error("HTTP "+r.status);
     items = await r.json();
+    hideOverlay();
     renderWarn(); renderList();
     if(loud) toast("✓ 已刷新");
-  }catch(e){ toast("连接后台失败，请检查网络"); }
+  }catch(e){
+    if(attempt < 10){ setTimeout(()=>loadAllRetry(loud, attempt+1), 4500); return; }  // 冷启动最长约 50s，分批重试自愈
+    hideOverlay();
+    toast("⚠ 仍无法连接，请下拉刷新页面或稍后重试（免费服务器偶发休眠）");
+  }
+}
+
+/* ===== 导入文档（PDF / Word） ===== */
+function startImport(){ document.getElementById("impFile").click(); }
+async function onImportFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  input.value = "";
+  showOverlay("📄 正在解析文档，请稍候…");
+  try{
+    const fd = new FormData(); fd.append("file", file);
+    const r = await fetch("/api/extract-text", {method:"POST", body:fd});
+    const j = await r.json().catch(()=>({}));
+    hideOverlay();
+    if(!r.ok || !j.ok){ toast("导入失败："+(j.msg||"请确认是文字版 PDF/Word")); return; }
+    const f = j.fields || {};
+    FIELDS.forEach(k=>{ const el=document.getElementById("f_"+k); if(el) el.value = f[k]||""; });
+    draft = {id:null};
+    document.getElementById("formTitle").textContent="＋ 新增药物（已导入，请核对）";
+    document.getElementById("cancelBtn").style.display="none";
+    document.getElementById("saveBtn").textContent="💾 保存";
+    window.scrollTo({top:0,behavior:"smooth"});
+    toast("✓ 已从文档识别，请核对后点保存");
+  }catch(e){ hideOverlay(); toast("连接后台失败，请重试"); }
 }
 function renderWarn(){
   const box = document.getElementById("warnBox");
@@ -164,8 +211,8 @@ function renderList(){
     list = items.filter(d=>FIELDS.some(k=>String(d[k]||"").toLowerCase().includes(q)));
   }
   if(!list.length){
-    box.innerHTML = q ? '<div class="empty">没有匹配的条目，换个关键词试试。</div>'
-                      : '<div class="empty">清单还是空的。用上方表单添加第一款杀虫剂。</div>';
+      box.innerHTML = q ? '<div class="empty">没有匹配的条目，换个关键词试试。</div>'
+                      : '<div class="empty">清单还是空的。点右上角「📄 导入文档」或手动添加第一款药物。</div>';
     return;
   }
   box.innerHTML = list.map(d=>{
@@ -195,7 +242,7 @@ function clearForm(){
   draft = {id:null};
   FIELDS.forEach(k=>{ document.getElementById("f_"+k).value = ""; });
   document.getElementById("f_validUntil").value = "";
-  document.getElementById("formTitle").textContent="＋ 新增杀虫剂";
+  document.getElementById("formTitle").textContent="＋ 新增药物";
   document.getElementById("saveBtn").textContent="💾 保存";
   document.getElementById("cancelBtn").style.display="none";
 }
@@ -238,6 +285,6 @@ clearForm();
 const _bid=document.getElementById("buildId"); if(_bid) _bid.textContent=PAGE_BUILD;
 checkBuild(); loadAll();
 </script>
-<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-0900 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
+<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px 0 6px">页面版本 v2026-11-06-1000 · 构建 <span id="buildId">__BUILD__</span> · 若版本号为旧号，请关闭页面重新打开以加载最新版</div>
 </body>
 </html>
