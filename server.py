@@ -262,6 +262,368 @@ def extract_text():
         return jsonify({"ok": False, "msg": "未能从文档提取到文字（可能是扫描图片版 PDF，请用文字版）"}), 400
     return jsonify({"ok": True, "text": text[:4000], "fields": parse_drug_fields(text)})
 
+
+# ===== 现场服务报告 xlsx 一键导入 =====
+# 9 张表按 stations.js 的 SH/ST 结构映射；签名区一律跳过
+RPT_CHECK = ["E", "H", "G", "F-1", "F-2"]
+RPT_FREE = ["消杀记录", "物料进出厂清单", "CAPA"]
+# 各表列键（与 stations.js 的 SH[n].cols 顺序一致，由前端 schema 传入为准）
+RPT_DEFAULT_COLS = {
+    "E": ["a", "b", "c", "d", "e"],
+    "H": ["a", "b", "c", "d"],
+    "G": ["a", "b", "c", "d", "e", "f"],
+    "F-1": ["a", "b", "c", "d", "e", "f", "g"],
+    "F-2": ["a", "b", "c", "d", "e", "f", "g"],
+    "消杀记录": ["date", "place", "drug", "target", "method", "regNo", "ratio", "operator", "note"],
+    "物料进出厂清单": ["name", "bringIn", "used", "waste", "remain", "note"],
+    "CAPA": ["no", "date", "place", "missing", "reason", "action", "due", "owner", "before", "after", "done", "closed"],
+}
+RPT_MATERIAL_HEAD = ["产品名称", "批号", "靶标生物", "药品登记号", "具体使用地点", "使用方法", "浓度剂量", "用量"]
+# 计数列（stations.js 里 type==="01"）：只保留数字，原表的 "-" / "·" / "/" 视为无异常 -> 0
+RPT_NUM_KEYS = {
+    "E": ["a", "b"], "H": ["a"], "G": ["a", "b", "c"],
+    "F-1": ["a", "b", "c", "d", "e"], "F-2": ["a", "b", "c", "d", "e"],
+}
+RPT_FREE_ROWS = {"消杀记录": 30, "物料进出厂清单": 34, "CAPA": 18}
+# SR 主表复选框字段的候选项（与 stations.js opts 一致）
+RPT_SR_OPTS = {
+    "pests": ["鼠类", "蟑螂", "蚂蚁", "蝇", "蚊", "其他"],
+    "visitType": ["首次", "常规", "评估", "紧急", "跟进", "一次性"],
+    "q1Pests": ["鼠", "蟑螂", "飞虫", "其他"],
+    "attachments": ["图片简报", "风险清单", "检查记录", "消杀记录"],
+    "risk": ["高", "中", "低"],
+}
+
+
+def RPT_cstr(v):
+    """单元格值 -> 字符串（时间/日期/数字统一格式化）"""
+    if v is None:
+        return ""
+    if isinstance(v, datetime.datetime):
+        if v.year <= 1900:  # Excel 里的时间常存成 1900-01-02 08:30:00
+            return v.strftime("%H:%M")
+        if v.hour == 0 and v.minute == 0 and v.second == 0:
+            return v.strftime("%Y-%m-%d")
+        return v.strftime("%Y-%m-%d %H:%M")
+    if isinstance(v, datetime.date):
+        return v.strftime("%Y-%m-%d")
+    if isinstance(v, datetime.time):
+        return v.strftime("%H:%M")
+    if isinstance(v, float):
+        return str(int(v)) if v == int(v) else str(v)
+    if isinstance(v, bool):
+        return "是" if v else "不是"
+    return str(v).strip()
+
+
+def RPT_norm_date(s, year_hint=None):
+    """把 '2026年/Y11月/M 2日/D' / '11月2日' / '2025-08-18' 统一成 YYYY-MM-DD"""
+    if not s:
+        return ""
+    s = str(s)
+    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        return "%s-%02d-%02d" % (m.group(1), int(m.group(2)), int(m.group(3)))
+    nums = re.findall(r"\d{1,4}", re.sub(r"[年月日YMD/\s:]+", "-", s))
+    if len(nums) >= 3 and len(nums[0]) == 4:
+        return "%s-%02d-%02d" % (nums[0], int(nums[1]), int(nums[2]))
+    if len(nums) >= 2 and year_hint:
+        return "%s-%02d-%02d" % (year_hint, int(nums[0]), int(nums[1]))
+    return ""
+
+
+RPT_SIGN_WORDS = ("签字", "签名", "signature", "盖章")
+def RPT_is_sign_row(row):
+    """签名区 / 说明行：一律跳过，绝不进入导入数据"""
+    line = " ".join(v for v in row if v)
+    if any(w in line.lower() for w in RPT_SIGN_WORDS):
+        return True
+    first = (row[0] if row else "").strip()
+    return first.startswith("备注：") or first.startswith("备注:")
+
+
+def RPT__grid(ws):
+    return [[RPT_cstr(c) for c in row] for row in ws.iter_rows(values_only=True)]
+
+
+def RPT__row_nonempty(g, i):
+    return [j for j, v in enumerate(g[i]) if v] if i < len(g) else []
+
+
+def RPT_parse_report_xlsx(raw, schema=None):
+    """
+    返回 (report, summary, error)
+    report = {"date": "YYYY-MM-DD", "sheets": {...}}
+    签名区（操作人员签字 / 客户签字）完全跳过，不产生任何签名字段。
+    """
+    schema = schema or {}
+    ids_map = schema.get("ids") or {}
+    cols_map = schema.get("cols") or RPT_DEFAULT_COLS
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    except Exception as e:
+        return None, None, "Excel 打开失败：%s" % str(e)[:80]
+
+    names = set(wb.sheetnames)
+    missing = [n for n in (["SR"] + RPT_CHECK + RPT_FREE) if n not in names]
+    if "SR" not in names:
+        return None, None, "这不是现场服务报告（缺少 SR 工作表）"
+
+    sheets = {}
+    summary = {"sheets": {}, "missing": missing, "signSkipped": True}
+
+    # ---------- SR 主表 ----------
+    g = RPT__grid(wb["SR"])
+    fields = {}
+
+    def find_label(word, start=0, end=None):
+        end = end or len(g)
+        for i in range(start, min(end, len(g))):
+            for j, v in enumerate(g[i]):
+                if word in v:
+                    return i, j
+        return None
+
+    def right_value(i, j, maxgap=4):
+        for k in range(j + 1, min(j + 1 + maxgap, len(g[i]))):
+            if g[i][k]:
+                return g[i][k]
+        return ""
+
+    # 日期 / 时间
+    date_iso = ""
+    loc = find_label("服务日期")
+    if loc:
+        date_iso = RPT_norm_date(right_value(*loc))
+    loc = find_label("开始时间")
+    if loc:
+        v = right_value(*loc)
+        m = re.search(r"(\d{1,2}):(\d{2})", v)
+        if m:
+            fields["startTime"] = "%02d:%s" % (int(m.group(1)), m.group(2))
+    loc = find_label("完成时间")
+    if loc:
+        v = right_value(*loc)
+        m = re.search(r"(\d{1,2}):(\d{2})", v)
+        if m:
+            fields["finishTime"] = "%02d:%s" % (int(m.group(1)), m.group(2))
+    # 天气（单元格形如「天气：晴」）
+    for row in g[:6]:
+        for v in row:
+            m = re.search(r"天气\s*[:：]\s*(\S+)", v)
+            if m:
+                fields["weather"] = m.group(1)
+                break
+        if fields.get("weather"):
+            break
+
+    # 区域定位：目标有害生物 -> q1 -> 补充附件
+    r_target = (find_label("目标有害生物") or [None])[0]
+    r_q1 = (find_label("1.检查中是否发现害虫") or find_label("1. 检查中是否发现害虫") or [None])[0]
+    r_attach = (find_label("可能包含补充附件") or [None])[0]
+    r_material = (find_label("物料使用记录") or [None])[0]
+    r_service = (find_label("服务内容") or [None])[0]
+
+    def checked_in(row_from, row_to, opt):
+        """在指定行区间里找 ■+选项 的单元格"""
+        for i in range(max(0, row_from or 0), min(row_to or len(g), len(g))):
+            for v in g[i]:
+                if v.startswith("■"):
+                    body = v[1:].split("/")[0].strip()
+                    if body == opt:
+                        return True
+        return False
+
+    if r_target is not None and r_q1 is not None:
+        fields["pests"] = [o for o in RPT_SR_OPTS["pests"] if checked_in(r_target, r_q1, o)]
+        fields["visitType"] = [o for o in RPT_SR_OPTS["visitType"] if checked_in(r_target, r_q1, o)]
+    if r_q1 is not None:
+        fields["q1Pests"] = [o for o in RPT_SR_OPTS["q1Pests"] if checked_in(r_q1, r_q1 + 1, o)]
+    if r_attach is not None:
+        fields["attachments"] = [o for o in RPT_SR_OPTS["attachments"] if checked_in(r_attach, r_attach + 3, o)]
+        for o in RPT_SR_OPTS["risk"]:
+            if checked_in(r_attach, r_attach + 3, o):
+                fields["risk"] = o
+                break
+
+    # 四个是/否问题：按问题文字定位，在该行找 ■是 / ■不是
+    q_labels = [
+        ("q1", "1.检查中是否发现害虫"), ("q2", "2.检查中是否发现建筑结构漏洞"),
+        ("q3", "3.检查中是否发现卫生清洁问题"), ("q4", "4.上一次"),
+    ]
+    for key, label in q_labels:
+        loc = find_label(label)
+        if not loc:
+            continue
+        line = " ".join(g[loc[0]])
+        cells = [v for v in g[loc[0]] if v]
+        if any(v.startswith("■") and "不是" in v for v in cells):
+            fields[key] = "不是"
+        elif any(v.startswith("■") and re.search(r"是(?!非)", v) and "不是" not in v for v in cells):
+            fields[key] = "是"
+
+    # 服务内容 / 建议：按列收集多行文本
+    if r_service is not None and r_material is not None:
+        def collect(col):
+            parts = []
+            for i in range(r_service + 1, r_material):
+                v = g[i][col] if col < len(g[i]) else ""
+                if v and "服务内容" not in v and "Service Details" not in v:
+                    parts.append(v)
+            return "\n".join(parts).strip()
+        a = collect(0)
+        if a:
+            fields["serviceDetail"] = a
+        # 建议列：找 r_service 行里含「服务措施」的列
+        hj = next((j for j, v in enumerate(g[r_service]) if "服务措施" in v), 7)
+        b = collect(hj)
+        if b:
+            fields["recommend"] = b
+
+    # 物料使用记录（SR 内）：按表头文字定位列，再取数据行
+    materials = []
+    if r_material is not None:
+        hdr_i = None
+        col_idx = {}
+        for i in range(r_material, min(r_material + 4, len(g))):
+            row = g[i]
+            if "产品名称" in " ".join(row):
+                hdr_i = i
+                for h in RPT_MATERIAL_HEAD:
+                    col_idx[h] = next((j for j, v in enumerate(row) if h in v), None)
+                break
+        if hdr_i is not None:
+            stop = r_attach if r_attach is not None else len(g)
+            for i in range(hdr_i + 1, stop):
+                row = g[i]
+                if not any(row):
+                    continue
+                rec = {}
+                for x, h in enumerate(RPT_MATERIAL_HEAD):
+                    j = col_idx.get(h)
+                    v = row[j] if (j is not None and j < len(row)) else ""
+                    if v:
+                        rec["m" + str(x)] = v
+                if rec and rec.get("m0"):
+                    materials.append(rec)
+
+    # 服务日期同时写进 SR.fields.date，供填单页显示
+    if date_iso:
+        fields["date"] = date_iso
+    sheets["SR"] = {"fields": fields, "materials": materials}
+    summary["sheets"]["SR"] = {"materialRows": len(materials), "fields": len(fields)}
+
+    # ---------- 点位检查表 ----------
+    year_hint = date_iso[:4] if date_iso else None
+    for n in RPT_CHECK:
+        if n not in names:
+            sheets[n] = {}
+            continue
+        g = RPT__grid(wb[n])
+        keys = cols_map.get(n) or RPT_DEFAULT_COLS[n]
+        allowed = set(str(x) for x in ids_map.get(n, []))
+        # 找表头行（A 列含「编号」），数据从其后开始；也支持直接按编号正则扫全表
+        id_re = re.compile(r"^[0-9]?[A-Za-z]{1,3}-?\d{1,4}$")
+        data = {}
+        for row in g:
+            if not row or not row[0]:
+                continue
+            sid = row[0].strip()
+            if allowed:
+                if sid not in allowed:
+                    continue
+            elif not id_re.match(sid):
+                continue
+            rec = {}
+            numkeys = RPT_NUM_KEYS.get(n, [])
+            for x, k in enumerate(keys):
+                j = x + 1  # B 列起
+                v = row[j] if j < len(row) else ""
+                if v:
+                    if k in numkeys:
+                        # 计数格：只留数字；"-"/"·"/"/" 等占位视为无异常 0
+                        digits = re.sub(r"[^\d]", "", v)
+                        v = digits if digits else "0"
+                    rec[k] = v
+            if rec:
+                data[sid] = rec
+        sheets[n] = data
+        summary["sheets"][n] = {"filled": len(data), "expected": len(allowed) or None}
+
+    # ---------- 自由行表 ----------
+    for n in RPT_FREE:
+        if n not in names:
+            sheets[n] = []
+            continue
+        g = RPT__grid(wb[n])
+        keys = cols_map.get(n) or RPT_DEFAULT_COLS[n]
+        # 表头行 = 含该表第一个列名最多者；数据行从其后，排除双层表头
+        head_titles = {n: []}
+        skip_words = ("消杀记录", "日期", "物料名称", "带入数量", "使用量", "废弃物料",
+                      "剩余数量", "备注", "药品及物料进出工厂记录清单", "序号", "位置")
+        rows = []
+        for row in g:
+            if not row or not row[0]:
+                continue
+            # 签名区（操作人员签字 / 客户签字）与表尾说明一律跳过
+            if RPT_is_sign_row(row):
+                continue
+            first = row[0].strip()
+            if first in skip_words or first.startswith("带入") or first.startswith("带出"):
+                continue
+            rec = {}
+            for x, k in enumerate(keys):
+                v = row[x] if x < len(row) else ""
+                if not v:
+                    continue
+                if k in ("date", "due", "done"):
+                    v = RPT_norm_date(v, year_hint)
+                    if not v:
+                        continue
+                rec[k] = v
+            if rec:
+                rows.append(rec)
+        # 限制在平台各表最大行数内
+        maxrows = RPT_FREE_ROWS.get(n, 30)
+        sheets[n] = rows[:maxrows]
+        summary["sheets"][n] = {"rows": len(sheets[n])}
+
+    return {"date": date_iso, "sheets": sheets}, summary, None
+
+
+@app.route("/api/parse-report-xlsx", methods=["POST"])
+def api_parse_report_xlsx():
+    """现场服务报告 xlsx -> 平台报告数据结构（签名一律留空，不解析签字区）"""
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "msg": "未收到文件"}), 400
+    name = (f.filename or "").lower()
+    if not name.endswith(".xlsx"):
+        return jsonify({"ok": False, "msg": "请上传 .xlsx 格式的 Excel 报告（旧版 .xls 请先用 Excel 另存为 .xlsx）"}), 400
+    try:
+        import openpyxl  # noqa: F401  (函数内部使用)
+    except ImportError:
+        return jsonify({"ok": False, "msg": "服务器缺少 Excel 组件，请联系管理员"}), 500
+    try:
+        schema = request.form.get("schema")
+        schema = json.loads(schema) if schema else None
+    except Exception:
+        schema = None
+    rep, summ, err = RPT_parse_report_xlsx(f.read(), schema)
+    if err:
+        return jsonify({"ok": False, "msg": err}), 400
+    # 二次保险：彻底剔除任何签名相关字段，确保导入后签名栏留空
+    def strip_sign(o):
+        if isinstance(o, dict):
+            return {k: strip_sign(v) for k, v in o.items()
+                    if not any(w in str(k).lower() for w in ("sign", "签名", "签字"))}
+        if isinstance(o, list):
+            return [strip_sign(x) for x in o]
+        return o
+    rep = strip_sign(rep)
+    return jsonify({"ok": True, "report": rep, "summary": summ})
+
 # 全量状态（同步脚本 / 前端加载用）
 @app.route("/api/state", methods=["GET"])
 def get_state():

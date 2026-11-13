@@ -90,7 +90,25 @@
   details.use{border:1px solid var(--line);border-radius:12px;background:#fff;margin-bottom:12px;padding:10px 14px}
   details.use summary{cursor:pointer;font-weight:600;font-size:14px}
   details.use .in{margin-top:8px;font-size:13px;color:var(--txt)}
-  @media(max-width:760px){ .grid2,.grid3{grid-template-columns:1fr} .wrap{padding:9px} .card{padding:11px} }
+  /* ===== Excel 一键导入预览弹窗 ===== */
+  .imp-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:120;display:none;
+    align-items:center;justify-content:center;padding:14px}
+  .imp-mask.show{display:flex}
+  .imp-box{background:#fff;border-radius:14px;width:min(560px,100%);max-height:88vh;overflow:auto;
+    box-shadow:0 12px 40px rgba(0,0,0,.22);padding:18px}
+  .imp-box h3{margin:0 0 4px;font-size:17px}
+  .imp-sub{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .imp-note{background:#e6f4ea;border:1px solid #a5d6a7;color:var(--green-d);border-radius:8px;
+    padding:9px 11px;font-size:13px;margin-bottom:12px;line-height:1.6}
+  .imp-warn{background:#fff8e1;border:1px solid #ffe082;color:#8a6d00;border-radius:8px;
+    padding:9px 11px;font-size:13px;margin-bottom:12px;line-height:1.6}
+  .imp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-bottom:12px}
+  .imp-cell{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;
+    display:flex;justify-content:space-between;gap:8px}
+  .imp-cell b{color:var(--green-d)}
+  .imp-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+  .imp-acts button{min-width:104px}
+  @media(max-width:760px){ .grid2,.grid3{grid-template-columns:1fr} .wrap{padding:9px} .card{padding:11px} .imp-grid{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -103,7 +121,11 @@
   <!-- ========== 列表视图（默认） ========== -->
   <div id="listView">
     <div class="card" style="padding:12px">
-      <button class="big" onclick="newReport()">＋ 新建现场服务报告</button>
+      <div class="btn-row" style="margin:0">
+        <button class="big" style="flex:1;min-width:190px" onclick="newReport()">＋ 新建现场服务报告</button>
+        <button class="big" style="flex:1;min-width:190px;background:#1565c0" onclick="pickImportXlsx()">📄 一键导入 Excel 报告</button>
+      </div>
+      <div class="note">选能多洁的现场服务报告 .xlsx，9 张表自动填入；<b>签名栏留空</b>，现场再签。</div>
     </div>
 
     <div class="card">
@@ -134,11 +156,12 @@
     <div class="card">
       <div class="btn-row" style="margin-top:0">
         <button class="ghost" onclick="backToList()">← 返回报告列表</button>
+        <button class="ghost" onclick="pickImportXlsx()">📄 导入 Excel</button>
         <span>服务日期 <input type="date" id="rDate" style="width:auto;display:inline-block;padding:6px 8px" onchange="onDateChange()"></span>
         <span id="progressTxt">—</span>
         <span id="signPill"></span>
       </div>
-      <div class="note">切换表格时会自动保存。未填的点位默认视为「无异常」，导出时会按空白列出。</div>
+      <div class="note">切换表格时会自动保存。未填的点位默认视为「无异常」，导出时会按空白列出。导入 Excel 会另存为一份新报告，不影响当前这份。</div>
     </div>
 
     <div class="card">
@@ -169,10 +192,30 @@
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12px;padding:8px 0 20px">
-    页面版本 v2026-11-06-1400 · 构建 <span id="buildId">__BUILD__</span>
+    页面版本 v2026-11-13-1200 · 构建 <span id="buildId">__BUILD__</span>
   </div>
 </div>
 <div class="toast" id="toast"></div>
+
+<input type="file" id="importXlsxFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none" onchange="onImportXlsxPicked(this)">
+
+<!-- Excel 导入预览弹窗 -->
+<div class="imp-mask" id="impMask">
+  <div class="imp-box">
+    <h3>📄 确认导入 Excel 报告</h3>
+    <div class="imp-sub" id="impFileName">—</div>
+    <div class="imp-note">✍ <b>签名栏一律留空</b>——导入只带入检查数据，不读入任何签字；导入后仍是「⏳ 待签名」，现场签完再提交。</div>
+    <div id="impWarn"></div>
+    <div class="imp-grid" id="impGrid"></div>
+    <div class="imp-note" style="background:#f0f4f0;border-color:var(--line);color:var(--txt)">
+      导入后会<b>另存为一份新报告</b>，现有报告不会被覆盖；日期取自 Excel 里的「服务日期」。
+    </div>
+    <div class="imp-acts">
+      <button class="ghost" onclick="closeImportXlsx()">取消</button>
+      <button onclick="confirmImportXlsx()">✓ 确认导入</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const PAGE_BUILD = "__BUILD__";
@@ -682,6 +725,85 @@ function importReportJSON(input){
     input.value="";
   };
   reader.readAsText(f);
+}
+
+/* ===== 一键导入 Excel 现场服务报告（签名一律留空） ===== */
+let pendingImport = null;
+const IMP_LABELS = {"SR":"SR 主表","E":"鼠类诱饵站","H":"捕鼠器","G":"粘鼠板",
+  "F-1":"灭蝇灯(一厂)","F-2":"灭蝇灯(二厂)","消杀记录":"消杀记录",
+  "物料进出厂清单":"物料进出厂清单","CAPA":"CAPA 改善追踪"};
+const IMP_STATION = ["E","H","G","F-1","F-2"];
+function pickImportXlsx(){
+  const el=document.getElementById("importXlsxFile");
+  if(el){ el.value=""; el.click(); }
+}
+function closeImportXlsx(){
+  document.getElementById("impMask").classList.remove("show");
+  pendingImport=null;
+}
+async function onImportXlsxPicked(input){
+  const f=input.files&&input.files[0];
+  if(!f) return;
+  if(!/\.xlsx$/i.test(f.name)){ toast("请选择 .xlsx 格式（旧版 .xls 请先另存为 .xlsx）"); input.value=""; return; }
+  const mask=document.getElementById("impMask");
+  toast("正在读取 Excel…");
+  try{
+    const fd=new FormData();
+    fd.append("file",f);
+    // 把点位台账传给后端做白名单匹配，避免把签名行/说明行当成点位
+    fd.append("schema",JSON.stringify({ids:ST}));
+    const r=await fetch(API("/api/parse-report-xlsx"),{method:"POST",body:fd});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok){ toast("导入失败："+(j.msg||r.status)); input.value=""; return; }
+    pendingImport=j;
+    renderImportPreview(f.name,j);
+    mask.classList.add("show");
+  }catch(e){ toast("连接失败，请稍后重试"); }
+  input.value="";
+}
+function renderImportPreview(fname,j){
+  document.getElementById("impFileName").textContent=fname+"　·　服务日期 "+(j.report.date||"未识别");
+  const sm=(j.summary&&j.summary.sheets)||{};
+  let h="",warn="";
+  IMP_STATION.forEach(n=>{
+    const d=sm[n]||{}, got=d.filled||0, exp=d.expected||0;
+    h+=`<div class="imp-cell"><span>${IMP_LABELS[n]}</span><b>${got}${exp?" / "+exp:""} 点位</b></div>`;
+  });
+  h+=`<div class="imp-cell"><span>${IMP_LABELS.SR}（物料）</span><b>${(sm.SR||{}).materialRows||0} 行</b></div>`;
+  ["消杀记录","物料进出厂清单","CAPA"].forEach(n=>{
+    h+=`<div class="imp-cell"><span>${IMP_LABELS[n]}</span><b>${(sm[n]||{}).rows||0} 行</b></div>`;
+  });
+  const miss=(j.summary&&j.summary.missing)||[];
+  const short=IMP_STATION.filter(n=>sm[n]&&sm[n].expected&&sm[n].filled<sm[n].expected);
+  if(!j.report.date) warn+="⚠ 未能识别「服务日期」，导入后默认今天，请手动改。<br>";
+  if(miss.length) warn+="⚠ 未找到工作表："+miss.join("、")+"（这几张表会是空白）<br>";
+  if(short.length) warn+="⚠ 以下表点位未全部匹配，请核对："+short.map(n=>IMP_LABELS[n]).join("、")+"<br>";
+  document.getElementById("impWarn").innerHTML=warn?`<div class="imp-warn">${warn}</div>`:"";
+  document.getElementById("impGrid").innerHTML=h;
+}
+async function confirmImportXlsx(){
+  if(!pendingImport) return;
+  const j=pendingImport;
+  const btn=document.querySelector("#impMask .imp-acts button:last-child");
+  if(btn){ btn.disabled=true; btn.textContent="导入中…"; }
+  try{
+    // 保存当前正在编辑的报告，避免未保存改动丢失
+    await saveIfDirty();
+    const data={date:j.report.date||todayStr(),client:DEF_CLIENT,
+                title:"现场服务报告 "+(j.report.date||todayStr()),sheets:j.report.sheets,progress:0};
+    normalize(data);   // 固定客户名称/地址；签名相关字段一律不带
+    const r=await fetch(API("/api/reports"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+    const out=await r.json().catch(()=>({}));
+    if(!r.ok||!out.ok){ toast("保存失败："+(out.msg||r.status)); return; }
+    closeImportXlsx();
+    await loadAll();
+    // 打开刚导入的报告（签名仍为空，现场再签）
+    await openReport(out.id);
+    toast("✓ 已导入 9 张表（签名留空，待现场签名）");
+  }catch(e){ toast("导入失败："+(e.message||"连接错误")); }
+  finally{
+    if(btn){ btn.disabled=false; btn.textContent="✓ 确认导入"; }
+  }
 }
 
 /* ===== 签名画板 ===== */
