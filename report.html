@@ -192,7 +192,7 @@
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12px;padding:8px 0 20px">
-    页面版本 v2026-11-13-1700 · 构建 <span id="buildId">__BUILD__</span>
+    页面版本 v2026-11-13-1730 · 构建 <span id="buildId">__BUILD__</span>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -682,12 +682,18 @@ td.c{text-align:center}
 .sign img{max-height:15mm;max-width:60mm;display:block;margin:0 3mm}
 .sr-body{display:flex;flex-direction:column;height:253mm}
 .sr-body .sign-tbl{margin-top:auto}
+.sheet-sign{margin-top:2mm}
+.sheet-sign td.lbl{font-size:7.5px;white-space:nowrap}
+.sheet-sign .sign{height:15mm}
+.sheet-sign .sign img{max-height:13mm}
 /* 点位表 */
 .meta td{font-size:7.5px;padding:1mm 1.3mm}
 .st thead th{font-size:7.5px;padding:1.2mm .6mm;height:7mm}
 .st tbody td{font-size:7.5px;padding:.9mm .6mm;text-align:center;height:4.9mm}
 .st tbody td.txt{text-align:left;font-size:7px}
-.free tbody td{font-size:7.5px;padding:1mm .8mm;height:5mm}
+.free tbody td{font-size:7px;padding:.8mm .6mm;height:5mm;max-height:9mm;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;white-space:normal;word-break:break-all}
+.free thead th{font-size:7px;padding:1mm .4mm}
 .sect{font-size:10px;font-weight:700;margin:2mm 0 1mm}
 `;
 
@@ -713,14 +719,29 @@ function pPage(inner,sub,year){
 function pChk(on,label){ return `<span class="chk">${on?"■":"□"}${pEsc(label)}</span>`; }
 function pCell(v){ return `<td class="c">${pEsc(pVal(v))}</td>`; }
 
+/* 签字栏：每一项检查记录表都要带（附件版式）。
+   kind="main" 首页用「操作人员签字/客户签字」；
+   kind="sheet" 检查表用「技术人员签名/客户签名」。
+   系统已有签名才显示签名图；未签一律留空白签字格，绝不伪造。 */
+function pSignBlock(kind){
+  const d=arguments[1]||"", conf=confirmations[d]||{},
+        p=conf.provider||{}, c=conf.company||{};
+  const opLabel=kind==="main"?"操作人员签字　Operator Signature：":"技术人员签名　Technician Signature：";
+  const clLabel=kind==="main"?"客户签字　Client Signature：":"客户签名　Client Signature：";
+  const cls=kind==="main"?"attach sign-tbl":"attach sheet-sign";
+  return `<table class="${cls}"><colgroup><col style="width:50%"><col style="width:50%"></colgroup>
+    <tr><td class="lbl">${opLabel}</td><td class="lbl">${clLabel}</td></tr>
+    <tr><td class="sign">${p.img?`<img src="${pEsc(p.img)}" alt="服务商签名">`:""}</td>
+        <td class="sign">${c.img?`<img src="${pEsc(c.img)}" alt="客户签名">`:""}</td></tr>
+    </table>`;
+}
+
 function buildReportPrintHTML(r){
   const sh=r.sheets||{}, mh=SH.SR.materialHead;
   const SF=(sh.SR&&sh.SR.fields)||{};
   const get=k=>{ let v=SF[k]; if(v==null||v==="") v=(SH.SR.fields.find(x=>x.k===k)||{}).def||""; return v; };
   const arr=k=>{ const v=SF[k]; return Array.isArray(v)?v:[]; };
   const date=r.date||"";
-  const conf=confirmations[date]||{};
-  const prov=conf.provider||{}, comp=conf.company||{};
   let pages=[];
 
   /* ---------- 第 1 页：SR 主表 ---------- */
@@ -770,11 +791,7 @@ function buildReportPrintHTML(r){
     <tr><td>${optRow(["图片简报","风险清单","检查记录","消杀记录"],attach)}</td>
         <td>${optRow(["高 / High","中 / Middle","低 / Low"],[risk?risk+" / "+({高:"High",中:"Middle",低:"Low"}[risk]||""):""])}</td></tr>
     </table>`;
-  A+=`<table class="attach sign-tbl" style="margin-top:1.5mm"><colgroup><col style="width:50%"><col style="width:50%"></colgroup>
-    <tr><td class="lbl">操作人员签字　Operator Signature：</td><td class="lbl">客户签字　Client Signature：</td></tr>
-    <tr><td class="sign">${prov.img?`<img src="${pEsc(prov.img)}" alt="服务商签名">`:""}</td>
-        <td class="sign">${comp.img?`<img src="${pEsc(comp.img)}" alt="客户签名">`:""}</td></tr>
-    </table></div>`;
+  A+=pSignBlock("main",date)+`</div>`;
   pages.push(pPage(A,"",date.slice(0,4)));
 
   /* ---------- 5 张点位检查表（每页固定行数，重复表头） ---------- */
@@ -782,15 +799,24 @@ function buildReportPrintHTML(r){
     "H":"LIST OF RECORDS (Trap) 捕鼠器检查记录","G":"LIST OF RECORDS (Rat Glue Board) 粘鼠板检查记录",
     "F-1":"LIST OF RECORDS FLY TRAP LIGHT 灭蝇灯检查记录（一厂区）",
     "F-2":"LIST OF RECORDS FLY TRAP LIGHT 灭蝇灯检查记录（二厂区）"};
-  const ROWS_PER=48;
+  const ROWS_PER=48, ROWS_LAST=42;   // 末页少排 6 行，给签字栏留位置
   CHECK.forEach(n=>{
     const def=SH[n], d=sh[n]||{}, ids=ST[n]||[], cols=def.cols;
     const ncols=cols.length;
     // 编号列 + 数值列窄，文字列宽
     const colw=cols.map(c=>c.type==="01"?Math.floor(58/ncols):Math.floor(42/Math.max(1,ncols-cols.filter(x=>x.type==="01").length)));
-    const total=ids.length||1, npages=Math.max(1,Math.ceil(total/ROWS_PER));
+    // 切分页：最后一页最多 ROWS_LAST 行，保证签字栏不被挤到下一页
+    const total=ids.length||1, chunks=[];
+    let s=0;
+    while(s<total){
+      const left=total-s;
+      if(left<=ROWS_LAST){ chunks.push([s,total]); break; }
+      if(left<=ROWS_PER+ROWS_LAST){ const half=Math.ceil(left/2); chunks.push([s,s+half]); s+=half; continue; }
+      chunks.push([s,s+ROWS_PER]); s+=ROWS_PER;
+    }
+    const npages=chunks.length;
     for(let pg=0;pg<npages;pg++){
-      const slice=ids.slice(pg*ROWS_PER,(pg+1)*ROWS_PER);
+      const slice=ids.slice(chunks[pg][0],chunks[pg][1]);
       let B=`<div class="sect">${pEsc(def.title)}　<span style="font-weight:400;font-size:8px">（第 ${pg+1} / ${npages} 页）</span></div>`;
       B+=`<table class="meta"><colgroup><col style="width:14%"><col style="width:56%"><col style="width:12%"><col style="width:18%"></colgroup>
         <tr><td class="lbl">客户名称 / CLIENT</td><td>${pEsc(pVal(get("client")))}</td>
@@ -801,20 +827,26 @@ function buildReportPrintHTML(r){
           return `<tr><td class="c">${pEsc(id)}</td>`+cols.map(c=>
             `<td class="${c.type==="01"?"c":"txt"}">${pEsc(pVal(row[c.k]))}</td>`).join("")+`</tr>`; }).join("")+
         `</tbody></table>`;
+      if(pg===npages-1) B+=pSignBlock("sheet",date);   // 每张检查表末页带签字栏
       pages.push(pPage(B,SUB_EN[n],date.slice(0,4)));
     }
   });
 
-  /* ---------- 3 张自由表 ---------- */
+  /* ---------- 3 张自由表（列多、文字长，按每页行数分页，末页带签字栏） ---------- */
+  const FREE_PER={"消杀记录":14,"物料进出厂清单":16,CAPA:11};
   FREE_SHEETS.forEach(n=>{
     const def=SH[n], cols=def.cols, rows=(sh[n]||[]).filter(x=>x&&Object.keys(x).length);
-    const showRows=Math.max(rows.length,6);
-    let C=`<div class="sect">${pEsc(def.title)}</div>`;
-    C+=`<table class="free"><thead><tr>${cols.map(c=>`<th>${pEsc(c.t)}</th>`).join("")}</tr></thead><tbody>`+
-      Array.from({length:Math.min(showRows,28)},(_,i)=>{ const x=rows[i]||{};
-        return `<tr>${cols.map(c=>`<td>${pEsc(pVal(x[c.k]))}</td>`).join("")}</tr>`; }).join("")+
-      `</tbody></table>`;
-    pages.push(pPage(C,def.title,date.slice(0,4)));
+    const per=FREE_PER[n]||14, shown=Math.max(rows.length,6);
+    const npg=Math.max(1,Math.ceil(shown/per));
+    for(let pg=0;pg<npg;pg++){
+      const part=Array.from({length:per},(_,j)=>rows[pg*per+j]||{});
+      let C=`<div class="sect">${pEsc(def.title)}　<span style="font-weight:400;font-size:8px">（第 ${pg+1} / ${npg} 页）</span></div>`;
+      C+=`<table class="free"><thead><tr>${cols.map(c=>`<th>${pEsc(c.t)}</th>`).join("")}</tr></thead><tbody>`+
+        part.map(x=>`<tr>${cols.map(c=>`<td>${pEsc(pVal(x[c.k]))}</td>`).join("")}</tr>`).join("")+
+        `</tbody></table>`;
+      if(pg===npg-1) C+=pSignBlock("sheet",date);
+      pages.push(pPage(C,def.title,date.slice(0,4)));
+    }
   });
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>现场服务报告 '+pEsc(date)+'</title>'+
