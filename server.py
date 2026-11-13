@@ -524,7 +524,8 @@ def RPT_parse_report_xlsx(raw, schema=None):
         keys = cols_map.get(n) or RPT_DEFAULT_COLS[n]
         allowed = set(str(x) for x in ids_map.get(n, []))
         # 找表头行（A 列含「编号」），数据从其后开始；也支持直接按编号正则扫全表
-        id_re = re.compile(r"^[0-9]?[A-Za-z]{1,3}-?\d{1,4}$")
+        # 兼容 A3-01 / 2E35 / LW001 / CY101 等带横杠或前导数字的编号
+        id_re = re.compile(r"^[0-9]?[A-Za-z]{1,3}[0-9]{0,2}-?\d{1,4}$")
         data = {}
         for row in g:
             if not row or not row[0]:
@@ -606,8 +607,13 @@ def api_parse_report_xlsx():
     except ImportError:
         return jsonify({"ok": False, "msg": "服务器缺少 Excel 组件，请联系管理员"}), 500
     try:
-        schema = request.form.get("schema")
-        schema = json.loads(schema) if schema else None
+        raw_schema = request.form.get("schema")
+        if not raw_schema:
+            # 兼容个别浏览器把 schema 当文件字段提交的情况
+            sf = request.files.get("schema")
+            if sf:
+                raw_schema = sf.read().decode("utf-8", "ignore")
+        schema = json.loads(raw_schema) if raw_schema else None
     except Exception:
         schema = None
     rep, summ, err = RPT_parse_report_xlsx(f.read(), schema)
